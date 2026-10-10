@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const NodeCache = require('node-cache');
 
-// Include web server for session pairing
+// Connect Express Pairing Server
 require('./server.js');
 
 const logger = pino({ level: 'fatal' });

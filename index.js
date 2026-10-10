@@ -11,7 +11,6 @@ const {
 const { handleCommand } = require('./commands');
 const config = require('./config');
 const pino = require('pino');
-const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const NodeCache = require('node-cache');
@@ -19,23 +18,9 @@ const NodeCache = require('node-cache');
 const logger = pino({ level: 'fatal' });
 const msgRetryCounterCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
-let rl;
-function getReadline() {
-    if (!rl || rl.closed) {
-        rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-    }
-    return rl;
-}
-
-const question = (text) =>
-    new Promise((resolve) => getReadline().question(text, resolve));
-
 let isStarting = false;
 let reconnectTimer = null;
-let pairingPromptHandled = false;
+let pairingRequested = false;
 let isShuttingDown = false;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -97,38 +82,30 @@ async function connectToWA() {
             if (
                 connection === 'connecting' &&
                 !state.creds.registered &&
-                !pairingPromptHandled
+                !pairingRequested
             ) {
-                pairingPromptHandled = true;
+                pairingRequested = true;
+                let phoneNumber = config.pairingNumber ? config.pairingNumber.replace(/\D/g, '') : '';
 
-                try {
-                    const answer = (
-                        await question('Do you want to use Pairing Code instead of QR? (y/n): ')
-                    ).trim().toLowerCase();
-
-                    if (answer === 'y' || answer === 'yes') {
-                        let phoneNumber = await question('Enter WhatsApp number (e.g. 947XXXXXXXX): ');
-                        phoneNumber = phoneNumber.replace(/\D/g, '');
-
-                        if (!phoneNumber) {
-                            console.log('Invalid phone number.');
-                        } else {
-                            await delay(1500);
-                            const code = await sock.requestPairingCode(phoneNumber);
-                            console.log(`\nYOUR PAIRING CODE: ${code?.match(/.{1,4}/g)?.join('-') || code}\n`);
-                        }
-                    } else {
-                        console.log('Scan the QR code printed above in the terminal.');
+                if (phoneNumber) {
+                    try {
+                        await delay(3000);
+                        console.log(`Requesting pairing code for ${phoneNumber}...`);
+                        const code = await sock.requestPairingCode(phoneNumber);
+                        console.log(`\n========================================`);
+                        console.log(`✨ YOUR PAIRING CODE: ${code?.match(/.{1,4}/g)?.join('-') || code} ✨`);
+                        console.log(`========================================\n`);
+                    } catch (err) {
+                        console.error('Pairing code error:', err.message);
                     }
-                } catch (err) {
-                    console.error('Pairing code error:', err.message);
+                } else {
+                    console.log('Scan the QR code printed above in the terminal or set PAIRING_NUMBER.');
                 }
             }
 
             if (connection === 'open') {
                 console.log(`✨ ${config.botName} Connected Successfully! ✨`);
-                pairingPromptHandled = false;
-                if (rl && !rl.closed) rl.close();
+                pairingRequested = false;
             }
 
             if (connection === 'close') {

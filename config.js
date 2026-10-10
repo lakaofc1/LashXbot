@@ -13,5 +13,10 @@ module.exports = {
     antiDelete: process.env.ANTI_DELETE_TOGGLE !== 'false',
     ANTI_DELETE: process.env.ANTI_DELETE || "group&inbox",
     DELETEMSGSENDTO: process.env.DELETE_MSG_SEND_TO || "",
-    MAX_SIZE: parseInt(process.env.MAX_SIZE) || 100
+    MAX_SIZE: parseInt(process.env.MAX_SIZE) || 100,
+
+    // 🌟 අලුතින් එකතු කළ Auto Features
+    alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', // Default: true (හැමවෙලේම Online පෙන්නයි)
+    autoTyping: process.env.AUTO_TYPING === 'true',      // Default: false (Typing පෙන්නන්න ඕන නම් true කරන්න)
+    autoRecording: process.env.AUTO_RECORDING === 'true' // Default: false (Recording පෙන්නන්න ඕන නම් true කරන්න)
 };

@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>LashxBot - Pairing & Connection</title>
+            <title>LashxBot - Pairing Code</title>
             <style>
                 body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
                 .card { background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; }
@@ -25,15 +25,16 @@ app.get('/', (req, res) => {
                 input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #475569; border-radius: 6px; background: #0f172a; color: #fff; box-sizing: border-box; }
                 button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
                 button:hover { background: #0369a1; }
-                #result { margin-top: 20px; font-size: 16px; color: #4ade80; word-break: break-all; }
+                #result { margin-top: 20px; font-size: 18px; color: #4ade80; word-break: break-all; }
+                .code-box { background: #0f172a; padding: 15px; border-radius: 8px; margin-top: 15px; font-size: 24px; color: #facc15; letter-spacing: 2px; font-weight: bold; border: 1px dashed #38bdf8; }
             </style>
         </head>
         <body>
             <div class="card">
-                <h2>LashxBot Linker</h2>
+                <h2>LashxBot Pairing</h2>
                 <p>Enter your WhatsApp number with country code</p>
                 <input type="text" id="phone" placeholder="e.g. 94784185833">
-                <button onclick="getCode()">Get Code & Connect</button>
+                <button onclick="getCode()">Get Pairing Code</button>
                 <div id="result"></div>
             </div>
             <script>
@@ -41,7 +42,7 @@ app.get('/', (req, res) => {
                     const phone = document.getElementById('phone').value;
                     const resDiv = document.getElementById('result');
                     if(!phone) { alert('Please enter phone number'); return; }
-                    resDiv.innerHTML = "Generating code and sending to your WhatsApp...";
+                    resDiv.innerHTML = "Generating code, please wait...";
                     
                     try {
                         const response = await fetch('/pair', {
@@ -50,10 +51,10 @@ app.get('/', (req, res) => {
                             body: JSON.stringify({ phone })
                         });
                         const data = await response.json();
-                        if(data.success) {
-                            resDiv.innerHTML = "Success! Pairing code has been sent to your WhatsApp number. Check your chats.";
+                        if(data.code) {
+                            resDiv.innerHTML = \`Your Pairing Code:<div class="code-box">\${data.code}</div>\`;
                         } else {
-                            resDiv.innerHTML = "Error: " + (data.error || "Failed to process");
+                            resDiv.innerHTML = "Error: " + (data.error || "Failed to generate");
                         }
                     } catch(e) {
                         resDiv.innerHTML = "Connection error!";
@@ -71,7 +72,8 @@ app.post('/pair', async (req, res) => {
         return res.status(400).json({ error: 'Invalid phone number' });
     }
 
-    const sessionDir = path.join(__dirname, 'session');
+    const sessionId = 'temp_' + Date.now();
+    const sessionDir = path.join(__dirname, 'sessions', sessionId);
 
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
@@ -87,28 +89,15 @@ app.post('/pair', async (req, res) => {
 
         sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('connection.update', async (update) => {
-            const { connection } = update;
-            if (connection === 'open') {
-                console.log('✨ LashxBot Connected Successfully via Web Pairing! ✨');
-            }
-        });
-
         setTimeout(async () => {
             try {
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join('-') || code;
-                
-                const targetJid = phoneNumber + '@s.whatsapp.net';
-                await sock.sendMessage(targetJid, { 
-                    text: `*✨ LASHXBOT PAIRING CODE ✨*\n\nYour code is: \`\`\`${code}\`\`\`\n\nEnter this code in your Linked Devices to connect your bot.` 
-                });
-
-                res.json({ success: true });
+                res.json({ code });
             } catch (err) {
                 res.status(500).json({ error: err.message });
             }
-        }, 3000);
+        }, 5000);
 
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -116,5 +105,5 @@ app.post('/pair', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });

@@ -49,11 +49,9 @@ async function connectToWA() {
             fs.mkdirSync(sessionDir, { recursive: true });
         }
 
-        // SESSION_ID ekata plain JSON text deela thiyenam creds.json file eka auto create karagannai
         if (config.sessionId && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
             try {
                 let sessData = config.sessionId.trim();
-                // Base64 nam decode karai, nathnam plain text widihata save karai
                 if (/^[A-Za-z0-9+/=]+$/.test(sessData) && !sessData.startsWith('{')) {
                     sessData = Buffer.from(sessData, 'base64').toString('utf-8');
                 }
@@ -80,7 +78,7 @@ async function connectToWA() {
             browser: Browsers.macOS("Safari"),
             generateHighQualityLinkPreview: true,
             syncFullHistory: true,
-            markOnlineOnConnect: true,
+            markOnlineOnConnect: config.alwaysOnline, // 🟢 Always Online Setting එක මෙතැනින්
             msgRetryCounterCache,
             getMessage: async () => {
                 return { conversation: 'Hello' };
@@ -121,6 +119,11 @@ async function connectToWA() {
             if (connection === 'open') {
                 console.log(`✨ ${config.botName} Connected Successfully! ✨`);
                 pairingRequested = false;
+
+                // 🟢 Always Online එක සක්‍රියව තබා ගැනීමට Presence Update කිරීම
+                if (config.alwaysOnline) {
+                    await sock.sendPresenceUpdate('available');
+                }
             }
 
             if (connection === 'close') {
@@ -144,6 +147,14 @@ async function connectToWA() {
                 try {
                     if (!mek.message || !mek.key?.remoteJid) continue;
                     const from = mek.key.remoteJid;
+
+                    // ⌨️ Auto Typing හෝ Auto Recording සක්‍රිය නම් ක්‍රියාත්මක වීම
+                    if (config.autoTyping) {
+                        await sock.sendPresenceUpdate('composing', from);
+                    } else if (config.autoRecording) {
+                        await sock.sendPresenceUpdate('recording', from);
+                    }
+
                     const isGroup = from.endsWith('@g.us');
                     const isFromMe = mek.key.fromMe;
                     const senderJid = isGroup ? (mek.key.participant || from) : from;

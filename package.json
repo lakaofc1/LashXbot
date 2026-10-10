@@ -1,0 +1,27 @@
+{
+  "name": "lashxbot",
+  "version": "3.0.0",
+  "description": "Ultimate WhatsApp Bot",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "whatsapp-bot",
+    "baileys",
+    "lashxbot"
+  ],
+  "author": "Lashmitha",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "axios": "latest",
+    "express": "latest",
+    "jimp": "^1.6.1",
+    "node-cache": "latest",
+    "pino": "latest",
+    "qrcode-terminal": "latest"
+  }
+}

@@ -252,7 +252,7 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                 let ppUrl = "No profile picture found";
                 try { ppUrl = await sock.profilePictureUrl(targetId, 'image'); } catch {}
 
-                const caption = `Profile Picture of:\n*${targetId}*\n\n> *𝗣 𝗢 𝗪 𝗘 𝗥 𝗘 𝗗  𝗕 𝗬   🇱 🇦 🇸 🇭 🇽 🇧 🇴 🇹*`;
+                const caption = `Profile Picture of:\n*${targetId}*\n\n> *𝗣 𝗢 𝗪 𝗘 𝗥 𝗘 🇩  🇧 🇾   🇱 🇦 🇸 🇭 🇽 🇧 🇴 🇹*`;
                 if (ppUrl !== "No profile picture found") {
                     await sock.sendMessage(from, { image: { url: ppUrl }, caption }, { quoted: mek });
                 } else {

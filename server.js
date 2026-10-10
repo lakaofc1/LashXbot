@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>LashxBot - Session Generator</title>
+            <title>LashxBot - Pairing & Connection</title>
             <style>
                 body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
                 .card { background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; }
@@ -30,10 +30,10 @@ app.get('/', (req, res) => {
         </head>
         <body>
             <div class="card">
-                <h2>LashxBot Session</h2>
-                <p>Enter your WhatsApp number to receive code</p>
+                <h2>LashxBot Linker</h2>
+                <p>Enter your WhatsApp number with country code</p>
                 <input type="text" id="phone" placeholder="e.g. 94784185833">
-                <button onclick="getCode()">Send Code to WhatsApp</button>
+                <button onclick="getCode()">Get Code & Connect</button>
                 <div id="result"></div>
             </div>
             <script>
@@ -41,7 +41,7 @@ app.get('/', (req, res) => {
                     const phone = document.getElementById('phone').value;
                     const resDiv = document.getElementById('result');
                     if(!phone) { alert('Please enter phone number'); return; }
-                    resDiv.innerHTML = "Processing and sending to your WhatsApp...";
+                    resDiv.innerHTML = "Generating code and sending to your WhatsApp...";
                     
                     try {
                         const response = await fetch('/pair', {
@@ -51,7 +51,7 @@ app.get('/', (req, res) => {
                         });
                         const data = await response.json();
                         if(data.success) {
-                            resDiv.innerHTML = "Pairing code has been sent to your WhatsApp number successfully!";
+                            resDiv.innerHTML = "Success! Pairing code has been sent to your WhatsApp number. Check your chats.";
                         } else {
                             resDiv.innerHTML = "Error: " + (data.error || "Failed to process");
                         }
@@ -71,8 +71,7 @@ app.post('/pair', async (req, res) => {
         return res.status(400).json({ error: 'Invalid phone number' });
     }
 
-    const sessionId = 'temp_' + Date.now();
-    const sessionDir = path.join(__dirname, 'sessions', sessionId);
+    const sessionDir = path.join(__dirname, 'session');
 
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
@@ -88,6 +87,13 @@ app.post('/pair', async (req, res) => {
 
         sock.ev.on('creds.update', saveCreds);
 
+        sock.ev.on('connection.update', async (update) => {
+            const { connection } = update;
+            if (connection === 'open') {
+                console.log('✨ LashxBot Connected Successfully via Web Pairing! ✨');
+            }
+        });
+
         setTimeout(async () => {
             try {
                 let code = await sock.requestPairingCode(phoneNumber);
@@ -95,14 +101,14 @@ app.post('/pair', async (req, res) => {
                 
                 const targetJid = phoneNumber + '@s.whatsapp.net';
                 await sock.sendMessage(targetJid, { 
-                    text: `*✨ LASHXBOT PAIRING CODE ✨*\n\nYour code is: \`\`\`${code}\`\`\`\n\nUse this code to link your WhatsApp device.` 
+                    text: `*✨ LASHXBOT PAIRING CODE ✨*\n\nYour code is: \`\`\`${code}\`\`\`\n\nEnter this code in your Linked Devices to connect your bot.` 
                 });
 
                 res.json({ success: true });
             } catch (err) {
                 res.status(500).json({ error: err.message });
             }
-        }, 4000);
+        }, 3000);
 
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -110,5 +116,5 @@ app.post('/pair', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Session server running on port ${PORT}`);
+    log(`Server running on port ${PORT}`);
 });

@@ -2,6 +2,7 @@ module.exports = {
     botName: "LashxBot",
     ownerName: "Lashan (Lashx)",
     ownerNumber: ["94784185833"],
+    pairingNumber: process.env.PAIRING_NUMBER || "94784185833",
     version: "v3.0.0",
     prefix: "#",
     workMode: "private", // public, private, inbox, group

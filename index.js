@@ -16,9 +16,6 @@ const fs = require('fs');
 const path = require('path');
 const NodeCache = require('node-cache');
 
-// Connect Express Pairing Server
-require('./server.js');
-
 const logger = pino({ level: 'fatal' });
 const msgRetryCounterCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 

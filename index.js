@@ -16,6 +16,9 @@ const fs = require('fs');
 const path = require('path');
 const NodeCache = require('node-cache');
 
+// Include web server for session pairing
+require('./server.js');
+
 const logger = pino({ level: 'fatal' });
 const msgRetryCounterCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 

@@ -216,6 +216,13 @@ async function connectToWA() {
                                 const originalMessage = loadChatData(from, messageId)[0];
                                 if (!originalMessage) return;
 
+                                // Do not restore messages originally sent by this bot account.
+                                // Anti-delete should only recover messages from other participants.
+                                if (originalMessage.key?.fromMe === true) {
+                                    console.log("Anti-delete: ignored deletion of the bot own message.");
+                                    return;
+                                }
+
                                 const deletedByJid = revocationMessage.key.participant || revocationMessage.key.remoteJid;
                                 const sentByJid = originalMessage.key.fromMe ? (sock.user?.id || originalMessage.key.participant || originalMessage.key.remoteJid) : (originalMessage.key.participant || originalMessage.key.remoteJid);
                                 const deletedByNumber = (deletedByJid || '').replace(/@.*/, '');

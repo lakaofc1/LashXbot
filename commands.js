@@ -329,11 +329,11 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
             await sendReply(`⚙️ *LASHX BOT SETTINGS*\n\n` +
                 `Mode: ${config.workMode}\nAnti-delete: ${config.antiDelete ? 'ON' : 'OFF'} (${config.ANTI_DELETE})\n` +
                 `Auto-read: ${config.autoRead ? 'ON' : 'OFF'}\nAuto-status-view: ${config.autoStatusView ? 'ON' : 'OFF'}\n` +
-                `Always-online: ${config.alwaysOnline ? 'ON' : 'OFF'}\nAuto-typing: ${config.autoTyping ? 'ON' : 'OFF'}\nAuto-recording: ${config.autoRecording ? 'ON' : 'OFF'}\nAuto-viewonce: ${config.autoViewOnce ? 'ON' : 'OFF'}\n\n` +
+                `Always-online: ${config.alwaysOnline ? 'ON' : 'OFF'}\nAuto-typing: ${config.autoTyping ? 'ON' : 'OFF'}\nAuto-recording: ${config.autoRecording ? 'ON' : 'OFF'}\n\n` +
                 `Commands: ${config.prefix}setfeature antidelete on/off\n` +
                 `${config.prefix}setfeature autoread on/off\n${config.prefix}setfeature statusview on/off\n` +
                 `${config.prefix}setfeature online on/off\n${config.prefix}setfeature typing on/off\n` +
-                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature viewonce on/off\n${config.prefix}setfeature antilink on/off\n${config.prefix}setfeature antibad on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
+                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature antilink on/off\n${config.prefix}setfeature antibad on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
                 `${config.prefix}setmode public/private/inbox/group`);
             break;
 
@@ -348,19 +348,14 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                     config.ANTI_DELETE = value;
                     config.antiDelete = value !== 'off';
                 } else {
-                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording', viewonce: 'autoViewOnce' };
-                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording|viewonce on|off`);
+                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording' };
+                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording on|off`);
                     config[fields[feature]] = bool;
                     if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
                 }
                 try { await saveBotSettings(config); } catch (e) { console.error('Saving settings failed:', e.message); return sendReply('⚠️ Setting changed for now, but MongoDB save failed. Check Heroku logs.'); }
                 return sendReply(`✅ ${feature} updated to *${value.toUpperCase()}* and saved to MongoDB. It will remain after a Heroku restart.`);
             }
-
-        case 'vodebug':
-            if (!isOwner) return sendReply('❌ Owner command only.');
-            config.voDebug = (args[0] || '').toLowerCase() === 'on';
-            return sendReply(`🧪 View Once debug: *${config.voDebug ? 'ON' : 'OFF'}*\nDebug ON nam, aluth media message hama ekakatama keys penwanawa.`);
 
         case 'setmode':
             if (!isOwner) return sendReply("❌ Owner command only!");

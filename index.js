@@ -4,7 +4,6 @@ const {
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
     downloadMediaMessage,
-    jidNormalizedUser,
     Browsers
 } = require('@whiskeysockets/baileys');
 
@@ -58,119 +57,6 @@ function getTextFromMessage(message) {
     return content.conversation || content.extendedTextMessage?.text ||
         content.imageMessage?.caption || content.videoMessage?.caption ||
         content.documentMessage?.caption || content.documentWithCaptionMessage?.message?.documentMessage?.caption || '';
-}
-
-
-// ---------- Auto View Once -> normal media ----------
-const processedViewOnce = new Set();
-
-function getViewOnceInfo(message) {
-    let current = message || {};
-    let wrapped = false;
-
-    for (let i = 0; i < 6; i++) {
-        if (current.viewOnceMessage || current.viewOnceMessageV2 || current.viewOnceMessageV2Extension) wrapped = true;
-        const next = current.ephemeralMessage?.message ||
-            current.viewOnceMessage?.message ||
-            current.viewOnceMessageV2?.message ||
-            current.viewOnceMessageV2Extension?.message ||
-            current.documentWithCaptionMessage?.message;
-        if (!next) break;
-        current = next;
-    }
-
-    for (const type of ['imageMessage', 'videoMessage', 'audioMessage']) {
-        const media = current[type];
-        if (media && (wrapped || media.viewOnce === true)) {
-            return { type, media, content: current };
-        }
-    }
-    return null;
-}
-
-
-function getViewOnceTarget(sock) {
-    if (config.VIEWONCE_SEND_TO) return String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net';
-    return jidNormalizedUser(sock.user?.id || '');
-}
-
-function getMsgTimestamp(mek) {
-    const t = mek.messageTimestamp;
-    if (typeof t === 'number') return t;
-    if (t && typeof t.toNumber === 'function') return t.toNumber();
-    const n = Number(t);
-    return Number.isFinite(n) ? n : 0;
-}
-
-async function forwardViewOnce(sock, mek, from, isGroup) {
-    const info = getViewOnceInfo(mek.message);
-    const rawKeys = Object.keys(mek.message || {}).filter((k) => k !== 'messageContextInfo');
-    const hasVOText = /viewonce/i.test(JSON.stringify(mek.message || {}).slice(0, 20000));
-    const isPlainText = rawKeys.every((k) => ['conversation', 'extendedTextMessage', 'reactionMessage', 'senderKeyDistributionMessage'].includes(k));
-
-    // In-chat diagnostics (.vodebug on)
-    if (config.voDebug && !isPlainText) {
-        await sock.sendMessage(getViewOnceTarget(sock), {
-            text: `🧪 *VO DEBUG*\nkeys: ${rawKeys.join(', ')}\nprotocolType: ${mek.message?.protocolMessage?.type ?? '-'}\nviewOnce text found: ${hasVOText}\ndetected: ${info ? info.type : 'NO'}\nchat: ${from}`
-        });
-    }
-
-    if (!info) {
-        if (hasVOText) {
-            console.log('[VO] viewOnce text present but media not recognised. keys:', rawKeys.join(','));
-            await sock.sendMessage(getViewOnceTarget(sock), {
-                text: `⚠️ View Once message ekak awa, namuth type eka therunne naha.\nkeys: ${rawKeys.join(', ')}\nMe message eka mata yawanna.`
-            });
-        }
-        return;
-    }
-    console.log('[VO] View Once detected:', info.type);
-
-    const msgId = mek.key.id;
-    if (msgId) {
-        if (processedViewOnce.has(msgId)) return;
-        processedViewOnce.add(msgId);
-        if (processedViewOnce.size > 500) processedViewOnce.delete(processedViewOnce.values().next().value);
-    }
-
-    const target = getViewOnceTarget(sock);
-
-    const senderJid = isGroup ? (mek.key.participant || from) : from;
-    const senderNumber = (senderJid || '').replace(/@.*/, '');
-    const time = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' });
-
-    const details =
-        `👁️ *View Once Recovered*\n\n` +
-        `👤 *From:* ${mek.pushName || 'Unknown'} (+${senderNumber})\n` +
-        `💬 *Chat:* ${isGroup ? 'Group (' + from.replace(/@.*/, '') + ')' : 'Private'}\n` +
-        `🕒 *Time:* ${time}` +
-        (info.media.caption ? `\n\n📝 ${info.media.caption}` : '');
-
-    const buffer = await downloadMediaMessage(
-        { key: mek.key, message: info.content },
-        'buffer',
-        {},
-        { logger, reuploadRequest: sock.updateMediaMessage }
-    );
-
-    // NOTE: no `viewOnce: true` here, so it is sent as a NORMAL message
-    if (info.type === 'imageMessage') {
-        await sock.sendMessage(target, { image: buffer, caption: details });
-    } else if (info.type === 'videoMessage') {
-        await sock.sendMessage(target, {
-            video: buffer,
-            caption: details,
-            mimetype: info.media.mimetype || 'video/mp4'
-        });
-    } else {
-        await sock.sendMessage(target, { text: details });
-        await sock.sendMessage(target, {
-            audio: buffer,
-            mimetype: info.media.mimetype || 'audio/ogg; codecs=opus',
-            ptt: !!info.media.ptt
-        });
-    }
-    console.log(`View Once forwarded from +${senderNumber}`);
 }
 
 
@@ -274,14 +160,6 @@ async function connectToWA() {
 
             for (const mek of messages) {
                 try {
-                    if (config.voDebug && mek.key?.remoteJid && !mek.key.fromMe && mek.key.remoteJid !== 'status@broadcast' && (!mek.message || mek.messageStubType)) {
-                        try {
-                            await sock.sendMessage(getViewOnceTarget(sock), {
-                                text: `🧪 *VO DEBUG (empty/stub)*\nmessage: ${mek.message ? 'present' : 'MISSING'}\nstubType: ${mek.messageStubType ?? '-'}\nstubParams: ${JSON.stringify(mek.messageStubParameters || []).slice(0, 300)}\nupsertType: ${chatUpdate.type}\nchat: ${mek.key.remoteJid}`
-                            });
-                        } catch (_) {}
-                    }
-
                     if (!mek.message || !mek.key?.remoteJid) continue;
 
                     const from = mek.key.remoteJid;
@@ -408,19 +286,6 @@ async function connectToWA() {
                                     await handleIncomingMessage(mek);
                                 }
                             }
-                    }
-
-                    const msgTs = getMsgTimestamp(mek);
-                    const msgAge = msgTs ? Math.abs(Date.now() / 1000 - msgTs) : 0;
-                    if (config.autoViewOnce && !isFromMe && from !== 'status@broadcast' && msgAge < 300) {
-                        try {
-                            await forwardViewOnce(sock, mek, from, isGroup);
-                        } catch (voErr) {
-                            console.error('Auto View Once failed:', voErr.stack || voErr.message);
-                            try {
-                                await sock.sendMessage(getViewOnceTarget(sock), { text: `⚠️ View Once message ekak awa, namuth recover karanna beri una.\nReason: ${voErr.message}` });
-                            } catch (_) {}
-                        }
                     }
 
                     if (from === 'status@broadcast') {

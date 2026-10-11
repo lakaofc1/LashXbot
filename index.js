@@ -37,6 +37,34 @@ function scheduleReconnect(delayMs = 3000) {
     }, delayMs);
 }
 
+function unwrapMessageContent(message) {
+    let current = message || {};
+    // Baileys wraps some messages (ephemeral, view-once, document-with-caption).
+    for (let i = 0; i < 5; i++) {
+        const next = current.ephemeralMessage?.message ||
+            current.viewOnceMessage?.message ||
+            current.viewOnceMessageV2?.message ||
+            current.viewOnceMessageV2Extension?.message ||
+            current.documentWithCaptionMessage?.message;
+        if (!next) break;
+        current = next;
+    }
+    return current;
+}
+
+function getTextFromMessage(message) {
+    const content = unwrapMessageContent(message);
+    return content.conversation || content.extendedTextMessage?.text ||
+        content.imageMessage?.caption || content.videoMessage?.caption ||
+        content.documentMessage?.caption || content.documentWithCaptionMessage?.message?.documentMessage?.caption || '';
+}
+
+function normalizeJid(jid) {
+    if (!jid) return '';
+    const [user] = String(jid).split(':');
+    return user.includes('@') ? user : `${user}@s.whatsapp.net`;
+}
+
 async function connectToWA() {
     if (isStarting || isShuttingDown) return;
     isStarting = true;
@@ -152,8 +180,7 @@ async function connectToWA() {
                     });
 
                     // 🛑 Anti-Delete Logic Execution
-                    if (!isOwner && config.ANTI_DELETE !== 'off') {
-                        if (!mek.key.id?.startsWith('BAE5')) {
+                    if (config.ANTI_DELETE !== 'off') {
                             const baseDir = 'message_data';
                             if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 
@@ -200,12 +227,13 @@ async function connectToWA() {
 
                                 const deleteInfo = `🕒 *Time:* _${sriLankaDateTime}_\n*🚮 Deleted by:* @${deletedByNumber}\n*📩 Sent by:* @${sentByNumber}\n\n`;
                                 const mentions = [deletedByJid, sentByJid].filter(Boolean);
-                                const original = originalMessage.message;
+                                const original = unwrapMessageContent(originalMessage.message);
+                                const messageText = getTextFromMessage(original);
+                                const textBlock = messageText ? `> 🔓 Text: \`\`\`${messageText}\`\`\`\n\n` : '';
 
                                 if (original.conversation || original.extendedTextMessage) {
-                                    const messageText = original.conversation || original.extendedTextMessage?.text || '';
                                     await conn.sendMessage(delfrom, {
-                                        text: `*🚫 Message Deleted !!*\n\n${deleteInfo}> 🔓 Text: \`\`\`${messageText}\`\`\``,
+                                        text: `*🚫 Message Deleted !!*\n\n${deleteInfo}${textBlock}`,
                                         mentions
                                     });
                                 } else {
@@ -213,10 +241,10 @@ async function connectToWA() {
                                     try {
                                         const media = await sms(conn, originalMessage).download();
                                         const kind = Object.keys(original).find((key) => key.endsWith('Message')) || 'message';
-                                        const caption = `*🚫 Deleted ${kind.replace('Message', '')} !!*\n\n${deleteInfo}`;
+                                        const caption = `*🚫 ${kind.replace('Message', '').replace(/^./, c => c.toLowerCase())} Deleted !!*\n\n${deleteInfo}${textBlock}`;
                                         let resentMessage = null;
-                                        if (original.imageMessage) { resentMessage = await conn.sendMessage(delfrom, { image: media, caption: original.imageMessage.caption || caption, mentions }); }
-                                        else if (original.videoMessage) { resentMessage = await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions, mimetype: original.videoMessage.mimetype }); }
+                                        if (original.imageMessage) { resentMessage = await conn.sendMessage(delfrom, { image: media, caption, mentions }); }
+                                        else if (original.videoMessage) { resentMessage = await conn.sendMessage(delfrom, { video: media, caption, mentions, mimetype: original.videoMessage.mimetype }); }
                                         else if (original.audioMessage) { resentMessage = await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/ogg; codecs=opus', ptt: !!original.audioMessage.ptt }); }
                                         else if (original.stickerMessage) { resentMessage = await conn.sendMessage(delfrom, { sticker: media }); }
                                         else if (original.documentMessage) { resentMessage = await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions }); }
@@ -254,7 +282,6 @@ async function connectToWA() {
                                     handleIncomingMessage(mek);
                                 }
                             }
-                        }
                     }
 
                     if (from === 'status@broadcast') {
@@ -290,29 +317,16 @@ async function connectToWA() {
                         await sock.sendPresenceUpdate('recording', from);
                     }
 
-                    const messageType = Object.keys(mek.message)[0];
-                    let body = '';
-
-                    if (messageType === 'conversation') {
-                        body = mek.message.conversation || '';
-                    } else if (messageType === 'extendedTextMessage') {
-                        body = mek.message.extendedTextMessage?.text || '';
-                    } else if (messageType === 'imageMessage' && mek.message.imageMessage?.caption) {
-                        body = mek.message.imageMessage.caption;
-                    } else if (messageType === 'videoMessage' && mek.message.videoMessage?.caption) {
-                        body = mek.message.videoMessage.caption;
-                    } else if (messageType === 'documentMessage' && mek.message.documentMessage?.caption) {
-                        body = mek.message.documentMessage.caption;
-                    }
+                    const body = getTextFromMessage(mek.message);
 
                     // Group moderation: anti-link and anti-bad-word. Only delete for non-admins.
                     if (isGroup && !isOwner && body) {
                         let metadata = null;
                         try { metadata = await sock.groupMetadata(from); } catch (_) {}
                         const participants = metadata?.participants || [];
-                        const isSenderAdmin = participants.some(p => p.id === senderJid && p.admin);
-                        const botJid = (sock.user?.id || '').split(':')[0] + '@s.whatsapp.net';
-                        const isBotAdmin = participants.some(p => p.id === botJid && p.admin);
+                        const isSenderAdmin = participants.some(p => normalizeJid(p.id) === normalizeJid(senderJid) && Boolean(p.admin));
+                        const botJid = normalizeJid(sock.user?.id || '');
+                        const isBotAdmin = participants.some(p => normalizeJid(p.id) === botJid && Boolean(p.admin));
                         if (!isSenderAdmin && isBotAdmin) {
                             const linkPattern = /(?:https?:\/\/|www\.|chat\.whatsapp\.com\/|wa\.me\/|t\.me\/|discord\.gg\/)[^\s]+/i;
                             if (config.antiLink && linkPattern.test(body)) {

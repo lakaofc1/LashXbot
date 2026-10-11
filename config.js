@@ -1,8 +1,8 @@
 module.exports = {
     botName: process.env.BOT_NAME || "LashxBot",
     ownerName: process.env.OWNER_NAME || "Lashan (Lashx)",
-    ownerNumber: process.env.OWNER_NUMBER ? process.env.OWNER_NUMBER.split(',') : ["94784185833"],
-    pairingNumber: process.env.PAIRING_NUMBER || "94784185833",
+    ownerNumber: process.env.OWNER_NUMBER ? process.env.OWNER_NUMBER.split(',') : ["94781121579"],
+    pairingNumber: process.env.PAIRING_NUMBER || "94781121579",
     sessionId: process.env.SESSION_ID || "",
     version: "v3.0.0",
     prefix: process.env.PREFIX || "#",

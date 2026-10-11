@@ -79,7 +79,7 @@ async function handleCommand(sock, mek, from, body, pushName) {
 ┃ Here is your complete command list!
 ┃
 ┣━━ 📂 *GENERAL COMMANDS*
-┃ ⚡ \`${config.prefix}ping\` - Check bot speed
+┃ ⚙️ \`${config.prefix}settings\` - View bot settings\n┃ ⚙️ \`${config.prefix}setfeature\` - Toggle features (owner)\n┃ ⚡ \`${config.prefix}ping\` - Check bot speed
 ┃ 👤 \`${config.prefix}owner\` - View owner details
 ┃ 👁️ \`${config.prefix}vv\` - Download view once
 ┃
@@ -321,6 +321,39 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                 await sendReply("❌ Error executing hidetag command!");
             }
             break;
+
+        case 'settings':
+        case 'botsettings':
+            if (!isOwner) return sendReply('❌ Owner command only.');
+            await sendReply(`⚙️ *LASHX BOT SETTINGS*\n\n` +
+                `Mode: ${config.workMode}\nAnti-delete: ${config.antiDelete ? 'ON' : 'OFF'} (${config.ANTI_DELETE})\n` +
+                `Auto-read: ${config.autoRead ? 'ON' : 'OFF'}\nAuto-status-view: ${config.autoStatusView ? 'ON' : 'OFF'}\n` +
+                `Always-online: ${config.alwaysOnline ? 'ON' : 'OFF'}\nAuto-typing: ${config.autoTyping ? 'ON' : 'OFF'}\nAuto-recording: ${config.autoRecording ? 'ON' : 'OFF'}\n\n` +
+                `Commands: ${config.prefix}setfeature antidelete on/off\n` +
+                `${config.prefix}setfeature autoread on/off\n${config.prefix}setfeature statusview on/off\n` +
+                `${config.prefix}setfeature online on/off\n${config.prefix}setfeature typing on/off\n` +
+                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
+                `${config.prefix}setmode public/private/inbox/group`);
+            break;
+
+        case 'setfeature':
+            if (!isOwner) return sendReply('❌ Owner command only.');
+            {
+                const feature = (args[0] || '').toLowerCase();
+                const value = (args[1] || '').toLowerCase();
+                const bool = value === 'on' ? true : value === 'off' ? false : null;
+                if (feature === 'antidelete-mode') {
+                    if (!['group', 'inbox', 'group&inbox', 'off'].includes(value)) return sendReply(`Use: ${config.prefix}setfeature antidelete-mode group|inbox|group&inbox|off`);
+                    config.ANTI_DELETE = value;
+                    config.antiDelete = value !== 'off';
+                } else {
+                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording' };
+                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording on|off`);
+                    config[fields[feature]] = bool;
+                    if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
+                }
+                return sendReply(`✅ ${feature} updated to *${value.toUpperCase()}*.\nNote: this command changes the running process settings; Heroku Config Vars remain the permanent defaults after a restart.`);
+            }
 
         case 'setmode':
             if (!isOwner) return sendReply("❌ Owner command only!");

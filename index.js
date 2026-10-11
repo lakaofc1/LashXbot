@@ -204,13 +204,24 @@ async function connectToWA() {
                                         text: `*🚫 Message Deleted !!*\n\n${deleteInfo}> 🔓 Text: \`\`\`${messageText}\`\`\``,
                                         mentions
                                     });
-                                } else if (original.imageMessage) {
-                                    const media = await sms(conn, originalMessage).download();
-                                    await conn.sendMessage(delfrom, {
-                                        image: media,
-                                        caption: `*🚫 Image Deleted !!*\n\n${deleteInfo}`,
-                                        mentions
-                                    });
+                                } else {
+                                    // Recover common media types when WhatsApp still allows the media to be downloaded.
+                                    try {
+                                        const media = await sms(conn, originalMessage).download();
+                                        const caption = `*🚫 Deleted ${Object.keys(original)[0].replace('Message', '')} !!*\n\n${deleteInfo}`;
+                                        if (original.imageMessage) await conn.sendMessage(delfrom, { image: media, caption, mentions });
+                                        else if (original.videoMessage) await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions });
+                                        else if (original.audioMessage) await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/mpeg', ptt: !!original.audioMessage.ptt }, { quoted: undefined });
+                                        else if (original.stickerMessage) await conn.sendMessage(delfrom, { sticker: media });
+                                        else if (original.documentMessage) await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions });
+                                        else if (original.contactMessage) await conn.sendMessage(delfrom, { text: `${caption}\nContact: ${original.contactMessage.displayName || ''}\n${original.contactMessage.vcard || ''}`, mentions });
+                                        else if (original.locationMessage) await conn.sendMessage(delfrom, { location: { degreesLatitude: original.locationMessage.degreesLatitude, degreesLongitude: original.locationMessage.degreesLongitude, name: original.locationMessage.name, address: original.locationMessage.address } });
+                                        else if (original.liveLocationMessage) await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } });
+                                        else await conn.sendMessage(delfrom, { text: `${caption}\nThis message type cannot be re-sent automatically.`, mentions });
+                                    } catch (mediaErr) {
+                                        console.error('Anti-delete media recovery failed:', mediaErr.message);
+                                        await conn.sendMessage(delfrom, { text: `🚫 A message was deleted, but its media could not be downloaded.\n${deleteInfo}WhatsApp may have expired the media key.`, mentions });
+                                    }
                                 }
                             }
 

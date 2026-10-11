@@ -12,7 +12,7 @@ const config = require('./config');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
-const { useMongoDBAuthState } = require('./mongodb-auth');
+const { useMongoDBAuthState, loadBotSettings } = require('./mongodb-auth');
 const NodeCache = require('node-cache');
 
 const logger = pino({ level: 'fatal' });
@@ -49,6 +49,10 @@ async function connectToWA() {
 
         // Credentials and Signal keys are persisted in MongoDB, not Heroku's ephemeral disk.
         const { state, saveCreds } = await useMongoDBAuthState();
+        try {
+            const savedSettings = await loadBotSettings();
+            if (savedSettings) Object.assign(config, savedSettings);
+        } catch (settingsErr) { console.error('Could not load saved bot settings:', settingsErr.message); }
 
         const sock = makeWASocket({
             version,
@@ -208,19 +212,28 @@ async function connectToWA() {
                                     // Recover common media types when WhatsApp still allows the media to be downloaded.
                                     try {
                                         const media = await sms(conn, originalMessage).download();
-                                        const caption = `*🚫 Deleted ${Object.keys(original)[0].replace('Message', '')} !!*\n\n${deleteInfo}`;
-                                        if (original.imageMessage) await conn.sendMessage(delfrom, { image: media, caption, mentions });
-                                        else if (original.videoMessage) await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions });
-                                        else if (original.audioMessage) await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/mpeg', ptt: !!original.audioMessage.ptt }, { quoted: undefined });
-                                        else if (original.stickerMessage) await conn.sendMessage(delfrom, { sticker: media });
-                                        else if (original.documentMessage) await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions });
-                                        else if (original.contactMessage) await conn.sendMessage(delfrom, { text: `${caption}\nContact: ${original.contactMessage.displayName || ''}\n${original.contactMessage.vcard || ''}`, mentions });
-                                        else if (original.locationMessage) await conn.sendMessage(delfrom, { location: { degreesLatitude: original.locationMessage.degreesLatitude, degreesLongitude: original.locationMessage.degreesLongitude, name: original.locationMessage.name, address: original.locationMessage.address } });
-                                        else if (original.liveLocationMessage) await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } });
-                                        else await conn.sendMessage(delfrom, { text: `${caption}\nThis message type cannot be re-sent automatically.`, mentions });
+                                        const kind = Object.keys(original).find((key) => key.endsWith('Message')) || 'message';
+                                        const caption = `*🚫 Deleted ${kind.replace('Message', '')} !!*\n\n${deleteInfo}`;
+                                        let sent = false;
+                                        if (original.imageMessage) { await conn.sendMessage(delfrom, { image: media, caption: original.imageMessage.caption || caption, mentions }); sent = true; }
+                                        else if (original.videoMessage) { await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions, mimetype: original.videoMessage.mimetype }); sent = true; }
+                                        else if (original.audioMessage) { await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/ogg; codecs=opus', ptt: !!original.audioMessage.ptt }); sent = true; }
+                                        else if (original.stickerMessage) { await conn.sendMessage(delfrom, { sticker: media }); sent = true; }
+                                        else if (original.documentMessage) { await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions }); sent = true; }
+                                        else if (original.contactMessage) { await conn.sendMessage(delfrom, { contacts: { displayName: original.contactMessage.displayName || 'Contact', contacts: [{ vcard: original.contactMessage.vcard || '' }] } }); sent = true; }
+                                        else if (original.contactsArrayMessage) { await conn.sendMessage(delfrom, { text: `${caption}\n${JSON.stringify(original.contactsArrayMessage)}`, mentions }); sent = true; }
+                                        else if (original.locationMessage) { await conn.sendMessage(delfrom, { location: { degreesLatitude: original.locationMessage.degreesLatitude, degreesLongitude: original.locationMessage.degreesLongitude, name: original.locationMessage.name, address: original.locationMessage.address } }); sent = true; }
+                                        else if (original.liveLocationMessage) { await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } }); sent = true; }
+                                        else { await conn.sendMessage(delfrom, { text: `${caption}\nThis message type has no supported resend format.`, mentions }); sent = true; }
+                                        // Sticker/audio/location messages cannot carry a normal caption, so send metadata separately.
+                                        if (sent && (original.stickerMessage || original.audioMessage || original.locationMessage || original.liveLocationMessage)) {
+                                            await conn.sendMessage(delfrom, { text: caption, mentions });
+                                        }
                                     } catch (mediaErr) {
                                         console.error('Anti-delete media recovery failed:', mediaErr.message);
-                                        await conn.sendMessage(delfrom, { text: `🚫 A message was deleted, but its media could not be downloaded.\n${deleteInfo}WhatsApp may have expired the media key.`, mentions });
+                                        // Do not send the confusing media-key warning to the chat. If WhatsApp no longer
+                                        // provides the media bytes, keep the failure only in Heroku logs.
+                                        console.warn('Anti-delete could not recover media; no warning message sent.');
                                     }
                                 }
                             }

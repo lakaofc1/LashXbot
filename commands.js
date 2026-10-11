@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { Jimp } = require('jimp');
 const { S_WHATSAPP_NET, jidNormalizedUser, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { saveBotSettings } = require('./mongodb-auth');
 
 async function handleCommand(sock, mek, from, body, pushName) {
     const isGroup = from.endsWith('@g.us');
@@ -352,7 +353,8 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                     config[fields[feature]] = bool;
                     if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
                 }
-                return sendReply(`✅ ${feature} updated to *${value.toUpperCase()}*.\nNote: this command changes the running process settings; Heroku Config Vars remain the permanent defaults after a restart.`);
+                try { await saveBotSettings(config); } catch (e) { console.error('Saving settings failed:', e.message); return sendReply('⚠️ Setting changed for now, but MongoDB save failed. Check Heroku logs.'); }
+                return sendReply(`✅ ${feature} updated to *${value.toUpperCase()}* and saved to MongoDB. It will remain after a Heroku restart.`);
             }
 
         case 'setmode':
@@ -361,7 +363,8 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                 return sendReply(`❌ Invalid mode! Use:\n${config.prefix}setmode public\n${config.prefix}setmode private`);
             }
             config.workMode = q.toLowerCase();
-            await sendReply(`✅ Bot work mode successfully changed to: *${config.workMode.toUpperCase()}*`);
+            try { await saveBotSettings(config); } catch (e) { console.error('Saving settings failed:', e.message); }
+            await sendReply(`✅ Bot work mode successfully changed to: *${config.workMode.toUpperCase()}* and saved to MongoDB.`);
             break;
 
         case 'restart':

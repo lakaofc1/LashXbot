@@ -58,4 +58,24 @@ async function useMongoDBAuthState() {
   return { state, saveCreds };
 }
 
-module.exports = { useMongoDBAuthState };
+async function loadBotSettings() {
+  const db = await getDb();
+  const doc = await db.collection('bot_settings').findOne({ _id: 'config' });
+  if (!doc) return null;
+  delete doc._id;
+  return doc;
+}
+
+async function saveBotSettings(config) {
+  const db = await getDb();
+  const fields = ['workMode', 'ANTI_DELETE', 'antiDelete', 'autoRead', 'autoStatusView', 'alwaysOnline', 'autoTyping', 'autoRecording', 'statusEmoji'];
+  const settings = {};
+  for (const field of fields) if (config[field] !== undefined) settings[field] = config[field];
+  await db.collection('bot_settings').updateOne(
+    { _id: 'config' },
+    { $set: { ...settings, updatedAt: new Date() } },
+    { upsert: true }
+  );
+}
+
+module.exports = { useMongoDBAuthState, loadBotSettings, saveBotSettings };

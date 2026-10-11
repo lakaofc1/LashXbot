@@ -4,6 +4,7 @@ const {
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
     downloadMediaMessage,
+    jidNormalizedUser,
     Browsers
 } = require('@whiskeysockets/baileys');
 
@@ -87,12 +88,42 @@ function getViewOnceInfo(message) {
     return null;
 }
 
+
+function getViewOnceTarget(sock) {
+    if (config.VIEWONCE_SEND_TO) return String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net';
+    return jidNormalizedUser(sock.user?.id || '');
+}
+
+function getMsgTimestamp(mek) {
+    const t = mek.messageTimestamp;
+    if (typeof t === 'number') return t;
+    if (t && typeof t.toNumber === 'function') return t.toNumber();
+    const n = Number(t);
+    return Number.isFinite(n) ? n : 0;
+}
+
 async function forwardViewOnce(sock, mek, from, isGroup) {
-    if (process.env.DEBUG_VIEWONCE === 'true') {
-        console.log('[VO-DEBUG] msg keys:', Object.keys(mek.message || {}).join(','));
-    }
     const info = getViewOnceInfo(mek.message);
-    if (!info) return;
+    const rawKeys = Object.keys(mek.message || {}).filter((k) => k !== 'messageContextInfo');
+    const hasVOText = /viewonce/i.test(JSON.stringify(mek.message || {}).slice(0, 20000));
+    const isPlainText = rawKeys.every((k) => ['conversation', 'extendedTextMessage', 'protocolMessage', 'reactionMessage', 'senderKeyDistributionMessage'].includes(k));
+
+    // In-chat diagnostics (.vodebug on)
+    if (config.voDebug && !isPlainText) {
+        await sock.sendMessage(getViewOnceTarget(sock), {
+            text: `🧪 *VO DEBUG*\nkeys: ${rawKeys.join(', ')}\nviewOnce text found: ${hasVOText}\ndetected: ${info ? info.type : 'NO'}\nchat: ${from}`
+        });
+    }
+
+    if (!info) {
+        if (hasVOText) {
+            console.log('[VO] viewOnce text present but media not recognised. keys:', rawKeys.join(','));
+            await sock.sendMessage(getViewOnceTarget(sock), {
+                text: `⚠️ View Once message ekak awa, namuth type eka therunne naha.\nkeys: ${rawKeys.join(', ')}\nMe message eka mata yawanna.`
+            });
+        }
+        return;
+    }
     console.log('[VO] View Once detected:', info.type);
 
     const msgId = mek.key.id;
@@ -102,10 +133,7 @@ async function forwardViewOnce(sock, mek, from, isGroup) {
         if (processedViewOnce.size > 500) processedViewOnce.delete(processedViewOnce.values().next().value);
     }
 
-    const botNumber = (sock.user?.id || '').split(':')[0].split('@')[0];
-    const target = config.VIEWONCE_SEND_TO
-        ? String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net'
-        : botNumber + '@s.whatsapp.net';
+    const target = getViewOnceTarget(sock);
 
     const senderJid = isGroup ? (mek.key.participant || from) : from;
     const senderNumber = (senderJid || '').replace(/@.*/, '');
@@ -374,16 +402,15 @@ async function connectToWA() {
                             }
                     }
 
-                    const msgAge = Math.abs(Date.now() / 1000 - Number(mek.messageTimestamp || 0));
+                    const msgTs = getMsgTimestamp(mek);
+                    const msgAge = msgTs ? Math.abs(Date.now() / 1000 - msgTs) : 0;
                     if (config.autoViewOnce && !isFromMe && from !== 'status@broadcast' && msgAge < 300) {
                         try {
                             await forwardViewOnce(sock, mek, from, isGroup);
                         } catch (voErr) {
                             console.error('Auto View Once failed:', voErr.stack || voErr.message);
                             try {
-                                const me = (sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net';
-                                const tgt = config.VIEWONCE_SEND_TO ? String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net' : me;
-                                await sock.sendMessage(tgt, { text: `⚠️ View Once message ekak awa, namuth recover karanna beri una.\nReason: ${voErr.message}` });
+                                await sock.sendMessage(getViewOnceTarget(sock), { text: `⚠️ View Once message ekak awa, namuth recover karanna beri una.\nReason: ${voErr.message}` });
                             } catch (_) {}
                         }
                     }

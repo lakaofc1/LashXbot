@@ -357,6 +357,11 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                 return sendReply(`✅ ${feature} updated to *${value.toUpperCase()}* and saved to MongoDB. It will remain after a Heroku restart.`);
             }
 
+        case 'vodebug':
+            if (!isOwner) return sendReply('❌ Owner command only.');
+            config.voDebug = (args[0] || '').toLowerCase() === 'on';
+            return sendReply(`🧪 View Once debug: *${config.voDebug ? 'ON' : 'OFF'}*\nDebug ON nam, aluth media message hama ekakatama keys penwanawa.`);
+
         case 'setmode':
             if (!isOwner) return sendReply("❌ Owner command only!");
             if (!q || !['public', 'private', 'inbox', 'group'].includes(q.toLowerCase())) {

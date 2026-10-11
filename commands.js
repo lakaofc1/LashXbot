@@ -333,7 +333,7 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                 `Commands: ${config.prefix}setfeature antidelete on/off\n` +
                 `${config.prefix}setfeature autoread on/off\n${config.prefix}setfeature statusview on/off\n` +
                 `${config.prefix}setfeature online on/off\n${config.prefix}setfeature typing on/off\n` +
-                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
+                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature antilink on/off\n${config.prefix}setfeature antibad on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
                 `${config.prefix}setmode public/private/inbox/group`);
             break;
 
@@ -348,8 +348,8 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                     config.ANTI_DELETE = value;
                     config.antiDelete = value !== 'off';
                 } else {
-                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording' };
-                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording on|off`);
+                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording', antilink: 'antiLink', antibad: 'antiBad' };
+                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording|antilink|antibad on|off`);
                     config[fields[feature]] = bool;
                     if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
                 }

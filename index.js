@@ -230,7 +230,7 @@ async function connectToWA() {
                                         // as a reply to the resent media/contact/location so the context stays attached.
                                         const needsReplyDetails = original.audioMessage || original.stickerMessage || original.contactMessage || original.contactsArrayMessage || original.locationMessage || original.liveLocationMessage;
                                         if (resentMessage && needsReplyDetails) {
-                                            await conn.sendMessage(delfrom, { text: caption, mentions, quoted: resentMessage });
+                                            await conn.sendMessage(delfrom, { text: caption, mentions }, { quoted: resentMessage });
                                         }
                                     } catch (mediaErr) {
                                         console.error('Anti-delete media recovery failed:', mediaErr.message);
@@ -303,6 +303,42 @@ async function connectToWA() {
                         body = mek.message.videoMessage.caption;
                     } else if (messageType === 'documentMessage' && mek.message.documentMessage?.caption) {
                         body = mek.message.documentMessage.caption;
+                    }
+
+                    // Group moderation: anti-link and anti-bad-word. Only delete for non-admins.
+                    if (isGroup && !isOwner && body) {
+                        let metadata = null;
+                        try { metadata = await sock.groupMetadata(from); } catch (_) {}
+                        const participants = metadata?.participants || [];
+                        const isSenderAdmin = participants.some(p => p.id === senderJid && p.admin);
+                        const botJid = (sock.user?.id || '').split(':')[0] + '@s.whatsapp.net';
+                        const isBotAdmin = participants.some(p => p.id === botJid && p.admin);
+                        if (!isSenderAdmin && isBotAdmin) {
+                            const linkPattern = /(?:https?:\/\/|www\.|chat\.whatsapp\.com\/|wa\.me\/|t\.me\/|discord\.gg\/)[^\s]+/i;
+                            if (config.antiLink && linkPattern.test(body)) {
+                                try {
+                                    await sock.sendMessage(from, { delete: mek.key });
+                                    await sock.sendMessage(from, { text: '🚫 Group links are not allowed.' }, { quoted: mek });
+                                } catch (e) { console.error('Anti-link action failed:', e.message); }
+                                continue;
+                            }
+                            if (config.antiBad) {
+                                try {
+                                    if (!global.__lashBadWords) {
+                                        const response = await fetch('https://laka-md-databes.pages.dev/bad.json');
+                                        if (response.ok) global.__lashBadWords = await response.json();
+                                    }
+                                    const bad = global.__lashBadWords;
+                                    const words = Array.isArray(bad) ? bad : (bad && typeof bad === 'object' ? Object.values(bad) : []);
+                                    const matched = words.some(word => typeof word === 'string' && word.trim() && body.toLowerCase().includes(word.toLowerCase()));
+                                    if (matched && !/tent|docu|https/i.test(body)) {
+                                        await sock.sendMessage(from, { delete: mek.key });
+                                        await sock.sendMessage(from, { text: '🚫 Bad word detected!' }, { quoted: mek });
+                                        continue;
+                                    }
+                                } catch (e) { console.error('Anti-bad-word check failed:', e.message); }
+                            }
+                        }
                     }
 
                     const pushName = mek.pushName || 'User';

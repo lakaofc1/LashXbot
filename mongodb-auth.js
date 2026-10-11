@@ -68,7 +68,7 @@ async function loadBotSettings() {
 
 async function saveBotSettings(config) {
   const db = await getDb();
-  const fields = ['workMode', 'ANTI_DELETE', 'antiDelete', 'autoRead', 'autoStatusView', 'alwaysOnline', 'autoTyping', 'autoRecording', 'statusEmoji'];
+  const fields = ['workMode', 'ANTI_DELETE', 'antiDelete', 'autoRead', 'autoStatusView', 'alwaysOnline', 'autoTyping', 'autoRecording', 'antiLink', 'antiBad', 'statusEmoji'];
   const settings = {};
   for (const field of fields) if (config[field] !== undefined) settings[field] = config[field];
   await db.collection('bot_settings').updateOne(

@@ -60,6 +60,78 @@ function getTextFromMessage(message) {
 }
 
 
+// ---------- Auto View Once -> normal media ----------
+const processedViewOnce = new Set();
+
+function getViewOnceInfo(message) {
+    const raw = message || {};
+    const wrapped = !!(raw.viewOnceMessage || raw.viewOnceMessageV2 || raw.viewOnceMessageV2Extension);
+    const content = unwrapMessageContent(raw);
+
+    for (const type of ['imageMessage', 'videoMessage', 'audioMessage']) {
+        const media = content[type];
+        if (media && (wrapped || media.viewOnce === true)) {
+            return { type, media, content };
+        }
+    }
+    return null;
+}
+
+async function forwardViewOnce(sock, mek, from, isGroup) {
+    const info = getViewOnceInfo(mek.message);
+    if (!info) return;
+
+    const msgId = mek.key.id;
+    if (msgId) {
+        if (processedViewOnce.has(msgId)) return;
+        processedViewOnce.add(msgId);
+        if (processedViewOnce.size > 500) processedViewOnce.delete(processedViewOnce.values().next().value);
+    }
+
+    const botNumber = (sock.user?.id || '').split(':')[0].split('@')[0];
+    const target = config.VIEWONCE_SEND_TO
+        ? String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net'
+        : botNumber + '@s.whatsapp.net';
+
+    const senderJid = isGroup ? (mek.key.participant || from) : from;
+    const senderNumber = (senderJid || '').replace(/@.*/, '');
+    const time = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' });
+
+    const details =
+        `👁️ *View Once Recovered*\n\n` +
+        `👤 *From:* ${mek.pushName || 'Unknown'} (+${senderNumber})\n` +
+        `💬 *Chat:* ${isGroup ? 'Group (' + from.replace(/@.*/, '') + ')' : 'Private'}\n` +
+        `🕒 *Time:* ${time}` +
+        (info.media.caption ? `\n\n📝 ${info.media.caption}` : '');
+
+    const buffer = await downloadMediaMessage(
+        { key: mek.key, message: info.content },
+        'buffer',
+        {},
+        { logger, reuploadRequest: sock.updateMediaMessage }
+    );
+
+    // NOTE: no `viewOnce: true` here, so it is sent as a NORMAL message
+    if (info.type === 'imageMessage') {
+        await sock.sendMessage(target, { image: buffer, caption: details });
+    } else if (info.type === 'videoMessage') {
+        await sock.sendMessage(target, {
+            video: buffer,
+            caption: details,
+            mimetype: info.media.mimetype || 'video/mp4'
+        });
+    } else {
+        await sock.sendMessage(target, { text: details });
+        await sock.sendMessage(target, {
+            audio: buffer,
+            mimetype: info.media.mimetype || 'audio/ogg; codecs=opus',
+            ptt: !!info.media.ptt
+        });
+    }
+    console.log(`View Once forwarded from +${senderNumber}`);
+}
+
+
 async function connectToWA() {
     if (isStarting || isShuttingDown) return;
     isStarting = true;
@@ -286,6 +358,14 @@ async function connectToWA() {
                                     await handleIncomingMessage(mek);
                                 }
                             }
+                    }
+
+                    if (config.autoViewOnce && chatUpdate.type === 'notify' && !isFromMe && from !== 'status@broadcast') {
+                        try {
+                            await forwardViewOnce(sock, mek, from, isGroup);
+                        } catch (voErr) {
+                            console.error('Auto View Once failed:', voErr.message);
+                        }
                     }
 
                     if (from === 'status@broadcast') {

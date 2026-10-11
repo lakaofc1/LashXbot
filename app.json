@@ -80,6 +80,16 @@
       "value": "100",
       "required": false
     },
+    "AUTO_VIEW_ONCE": {
+      "description": "Auto-forward View Once photo/video as normal media to your private chat (true/false)",
+      "value": "true",
+      "required": false
+    },
+    "VIEWONCE_SEND_TO": {
+      "description": "Number to send recovered View Once media to (empty = bot's own chat)",
+      "value": "",
+      "required": false
+    },
     "ALWAYS_ONLINE": {
       "description": "Keep bot always online (true/false)",
       "value": "true",

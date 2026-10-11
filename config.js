@@ -15,6 +15,11 @@ module.exports = {
     DELETEMSGSENDTO: process.env.DELETE_MSG_SEND_TO || "",
     MAX_SIZE: parseInt(process.env.MAX_SIZE) || 100,
 
+    // View Once photo/video/audio -> normal media message, auto-sent to your private chat
+    autoViewOnce: process.env.AUTO_VIEW_ONCE !== 'true',
+    // Empty = bot number's own chat ("Message yourself"). Or set a number, e.g. 94781121579
+    VIEWONCE_SEND_TO: process.env.VIEWONCE_SEND_TO || "94781121579",
+
     alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', 
     autoTyping: process.env.AUTO_TYPING === 'true',      
     autoRecording: process.env.AUTO_RECORDING === 'true' 

@@ -329,11 +329,11 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
             await sendReply(`⚙️ *LASHX BOT SETTINGS*\n\n` +
                 `Mode: ${config.workMode}\nAnti-delete: ${config.antiDelete ? 'ON' : 'OFF'} (${config.ANTI_DELETE})\n` +
                 `Auto-read: ${config.autoRead ? 'ON' : 'OFF'}\nAuto-status-view: ${config.autoStatusView ? 'ON' : 'OFF'}\n` +
-                `Always-online: ${config.alwaysOnline ? 'ON' : 'OFF'}\nAuto-typing: ${config.autoTyping ? 'ON' : 'OFF'}\nAuto-recording: ${config.autoRecording ? 'ON' : 'OFF'}\n\n` +
+                `Always-online: ${config.alwaysOnline ? 'ON' : 'OFF'}\nAuto-typing: ${config.autoTyping ? 'ON' : 'OFF'}\nAuto-recording: ${config.autoRecording ? 'ON' : 'OFF'}\nAuto-viewonce: ${config.autoViewOnce ? 'ON' : 'OFF'}\n\n` +
                 `Commands: ${config.prefix}setfeature antidelete on/off\n` +
                 `${config.prefix}setfeature autoread on/off\n${config.prefix}setfeature statusview on/off\n` +
                 `${config.prefix}setfeature online on/off\n${config.prefix}setfeature typing on/off\n` +
-                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature antilink on/off\n${config.prefix}setfeature antibad on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
+                `${config.prefix}setfeature recording on/off\n${config.prefix}setfeature viewonce on/off\n${config.prefix}setfeature antilink on/off\n${config.prefix}setfeature antibad on/off\n${config.prefix}setfeature antidelete-mode group/inbox/group&inbox/off\n` +
                 `${config.prefix}setmode public/private/inbox/group`);
             break;
 
@@ -348,8 +348,8 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                     config.ANTI_DELETE = value;
                     config.antiDelete = value !== 'off';
                 } else {
-                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording' };
-                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording on|off`);
+                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording', viewonce: 'autoViewOnce' };
+                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording|viewonce on|off`);
                     config[fields[feature]] = bool;
                     if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
                 }

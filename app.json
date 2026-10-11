@@ -3,7 +3,12 @@
   "description": "Ultimate WhatsApp Bot with Auto Features",
   "repository": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME",
   "logo": "https://i.ibb.co/6RqqZ5hg/file-000000005b908207bb180ce30137e11d.png",
-  "keywords": ["whatsapp", "bot", "baileys", "lashxbot"],
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "lashxbot"
+  ],
   "env": {
     "BOT_NAME": {
       "description": "Name of your bot",
@@ -31,13 +36,13 @@
       "required": false
     },
     "PREFIX": {
-      "description": "Command prefix symbol",
-      "value": "#",
+      "description": "Command prefix symbol (default: .)",
+      "value": ".",
       "required": false
     },
     "WORK_MODE": {
       "description": "Bot work mode: private or public",
-      "value": "private",
+      "value": "public",
       "required": false
     },
     "AUTO_READ": {
@@ -87,6 +92,16 @@
     },
     "AUTO_RECORDING": {
       "description": "Show auto recording status (true/false)",
+      "value": "false",
+      "required": false
+    },
+    "ANTI_LINK": {
+      "description": "Enable anti-link feature (true/false)",
+      "value": "true",
+      "required": false
+    },
+    "ANTI_BAD": {
+      "description": "Enable anti-bad-word feature (true/false)",
       "value": "false",
       "required": false
     }

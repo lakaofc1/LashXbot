@@ -57,6 +57,15 @@ async function useMongoDBAuthState() {
   return { state, saveCreds };
 }
 
+
+async function resetMongoDBAuthState() {
+  const db = await getDb();
+  await Promise.all([
+    db.collection('whatsapp_auth').deleteMany({}),
+    db.collection('whatsapp_keys').deleteMany({})
+  ]);
+}
+
 async function loadBotSettings() {
   const db = await getDb();
   const doc = await db.collection('bot_settings').findOne({ _id: 'config' });
@@ -77,4 +86,4 @@ async function saveBotSettings(config) {
   );
 }
 
-module.exports = { useMongoDBAuthState, loadBotSettings, saveBotSettings };
+module.exports = { useMongoDBAuthState, resetMongoDBAuthState, loadBotSettings, saveBotSettings };

@@ -12,7 +12,7 @@ const config = require('./config');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
-const { useMongoDBAuthState, loadBotSettings } = require('./mongodb-auth');
+const { useMongoDBAuthState, resetMongoDBAuthState, loadBotSettings } = require('./mongodb-auth');
 const NodeCache = require('node-cache');
 
 const logger = pino({ level: 'fatal' });
@@ -143,7 +143,16 @@ async function connectToWA() {
                 console.log(`Connection closed. Status Code: ${statusCode ?? 'Unknown'}`);
 
                 if (statusCode === DisconnectReason.loggedOut) {
-                    console.log('Logged out. Delete the /session folder and re-pair.');
+                    console.log('Logged out (401). Clearing only WhatsApp authentication data in MongoDB...');
+                    try {
+                        await resetMongoDBAuthState();
+                        pairingPromptHandled = false;
+                        console.log('WhatsApp auth data cleared. A fresh pairing code will be requested on reconnect.');
+                        scheduleReconnect(2500);
+                    } catch (resetErr) {
+                        console.error('Could not clear WhatsApp auth data:', resetErr.message);
+                        console.error('Fix MongoDB access and restart the worker to try again.');
+                    }
                 } else if (shouldReconnect) {
                     console.log('Reconnecting in 3 seconds...');
                     scheduleReconnect(3000);

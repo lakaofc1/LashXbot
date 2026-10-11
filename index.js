@@ -106,12 +106,12 @@ async function forwardViewOnce(sock, mek, from, isGroup) {
     const info = getViewOnceInfo(mek.message);
     const rawKeys = Object.keys(mek.message || {}).filter((k) => k !== 'messageContextInfo');
     const hasVOText = /viewonce/i.test(JSON.stringify(mek.message || {}).slice(0, 20000));
-    const isPlainText = rawKeys.every((k) => ['conversation', 'extendedTextMessage', 'protocolMessage', 'reactionMessage', 'senderKeyDistributionMessage'].includes(k));
+    const isPlainText = rawKeys.every((k) => ['conversation', 'extendedTextMessage', 'reactionMessage', 'senderKeyDistributionMessage'].includes(k));
 
     // In-chat diagnostics (.vodebug on)
     if (config.voDebug && !isPlainText) {
         await sock.sendMessage(getViewOnceTarget(sock), {
-            text: `🧪 *VO DEBUG*\nkeys: ${rawKeys.join(', ')}\nviewOnce text found: ${hasVOText}\ndetected: ${info ? info.type : 'NO'}\nchat: ${from}`
+            text: `🧪 *VO DEBUG*\nkeys: ${rawKeys.join(', ')}\nprotocolType: ${mek.message?.protocolMessage?.type ?? '-'}\nviewOnce text found: ${hasVOText}\ndetected: ${info ? info.type : 'NO'}\nchat: ${from}`
         });
     }
 
@@ -274,6 +274,14 @@ async function connectToWA() {
 
             for (const mek of messages) {
                 try {
+                    if (config.voDebug && mek.key?.remoteJid && !mek.key.fromMe && mek.key.remoteJid !== 'status@broadcast' && (!mek.message || mek.messageStubType)) {
+                        try {
+                            await sock.sendMessage(getViewOnceTarget(sock), {
+                                text: `🧪 *VO DEBUG (empty/stub)*\nmessage: ${mek.message ? 'present' : 'MISSING'}\nstubType: ${mek.messageStubType ?? '-'}\nstubParams: ${JSON.stringify(mek.messageStubParameters || []).slice(0, 300)}\nupsertType: ${chatUpdate.type}\nchat: ${mek.key.remoteJid}`
+                            });
+                        } catch (_) {}
+                    }
+
                     if (!mek.message || !mek.key?.remoteJid) continue;
 
                     const from = mek.key.remoteJid;

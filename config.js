@@ -16,9 +16,9 @@ module.exports = {
     MAX_SIZE: parseInt(process.env.MAX_SIZE) || 100,
 
     // View Once photo/video/audio -> normal media message, auto-sent to your private chat
-    autoViewOnce: process.env.AUTO_VIEW_ONCE !== 'true',
+    autoViewOnce: process.env.AUTO_VIEW_ONCE !== 'false',
     // Empty = bot number's own chat ("Message yourself"). Or set a number, e.g. 94781121579
-    VIEWONCE_SEND_TO: process.env.VIEWONCE_SEND_TO || "94781121579",
+    VIEWONCE_SEND_TO: process.env.VIEWONCE_SEND_TO || "",
 
     alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', 
     autoTyping: process.env.AUTO_TYPING === 'true',      

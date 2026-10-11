@@ -214,20 +214,23 @@ async function connectToWA() {
                                         const media = await sms(conn, originalMessage).download();
                                         const kind = Object.keys(original).find((key) => key.endsWith('Message')) || 'message';
                                         const caption = `*🚫 Deleted ${kind.replace('Message', '')} !!*\n\n${deleteInfo}`;
-                                        let sent = false;
-                                        if (original.imageMessage) { await conn.sendMessage(delfrom, { image: media, caption: original.imageMessage.caption || caption, mentions }); sent = true; }
-                                        else if (original.videoMessage) { await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions, mimetype: original.videoMessage.mimetype }); sent = true; }
-                                        else if (original.audioMessage) { await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/ogg; codecs=opus', ptt: !!original.audioMessage.ptt }); sent = true; }
-                                        else if (original.stickerMessage) { await conn.sendMessage(delfrom, { sticker: media }); sent = true; }
-                                        else if (original.documentMessage) { await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions }); sent = true; }
-                                        else if (original.contactMessage) { await conn.sendMessage(delfrom, { contacts: { displayName: original.contactMessage.displayName || 'Contact', contacts: [{ vcard: original.contactMessage.vcard || '' }] } }); sent = true; }
-                                        else if (original.contactsArrayMessage) { await conn.sendMessage(delfrom, { text: `${caption}\n${JSON.stringify(original.contactsArrayMessage)}`, mentions }); sent = true; }
-                                        else if (original.locationMessage) { await conn.sendMessage(delfrom, { location: { degreesLatitude: original.locationMessage.degreesLatitude, degreesLongitude: original.locationMessage.degreesLongitude, name: original.locationMessage.name, address: original.locationMessage.address } }); sent = true; }
-                                        else if (original.liveLocationMessage) { await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } }); sent = true; }
-                                        else { await conn.sendMessage(delfrom, { text: `${caption}\nThis message type has no supported resend format.`, mentions }); sent = true; }
-                                        // Sticker/audio/location messages cannot carry a normal caption, so send metadata separately.
-                                        if (sent && (original.stickerMessage || original.audioMessage || original.locationMessage || original.liveLocationMessage)) {
-                                            await conn.sendMessage(delfrom, { text: caption, mentions });
+                                        let resentMessage = null;
+                                        if (original.imageMessage) { resentMessage = await conn.sendMessage(delfrom, { image: media, caption: original.imageMessage.caption || caption, mentions }); }
+                                        else if (original.videoMessage) { resentMessage = await conn.sendMessage(delfrom, { video: media, caption: original.videoMessage.caption || caption, mentions, mimetype: original.videoMessage.mimetype }); }
+                                        else if (original.audioMessage) { resentMessage = await conn.sendMessage(delfrom, { audio: media, mimetype: original.audioMessage.mimetype || 'audio/ogg; codecs=opus', ptt: !!original.audioMessage.ptt }); }
+                                        else if (original.stickerMessage) { resentMessage = await conn.sendMessage(delfrom, { sticker: media }); }
+                                        else if (original.documentMessage) { resentMessage = await conn.sendMessage(delfrom, { document: media, mimetype: original.documentMessage.mimetype || 'application/octet-stream', fileName: original.documentMessage.fileName || 'deleted-file', caption, mentions }); }
+                                        else if (original.contactMessage) { resentMessage = await conn.sendMessage(delfrom, { contacts: { displayName: original.contactMessage.displayName || 'Contact', contacts: [{ vcard: original.contactMessage.vcard || '' }] } }); }
+                                        else if (original.contactsArrayMessage) { resentMessage = await conn.sendMessage(delfrom, { text: JSON.stringify(original.contactsArrayMessage), mentions }); }
+                                        else if (original.locationMessage) { resentMessage = await conn.sendMessage(delfrom, { location: { degreesLatitude: original.locationMessage.degreesLatitude, degreesLongitude: original.locationMessage.degreesLongitude, name: original.locationMessage.name, address: original.locationMessage.address } }); }
+                                        else if (original.liveLocationMessage) { resentMessage = await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } }); }
+                                        else { resentMessage = await conn.sendMessage(delfrom, { text: `${caption}\nThis message type has no supported resend format.`, mentions }); }
+
+                                        // For message types that cannot carry a caption, send the delete details
+                                        // as a reply to the resent media/contact/location so the context stays attached.
+                                        const needsReplyDetails = original.audioMessage || original.stickerMessage || original.contactMessage || original.contactsArrayMessage || original.locationMessage || original.liveLocationMessage;
+                                        if (resentMessage && needsReplyDetails) {
+                                            await conn.sendMessage(delfrom, { text: caption, mentions, quoted: resentMessage });
                                         }
                                     } catch (mediaErr) {
                                         console.error('Anti-delete media recovery failed:', mediaErr.message);

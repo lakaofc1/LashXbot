@@ -87,7 +87,7 @@
     },
     "VIEWONCE_SEND_TO": {
       "description": "Number to send recovered View Once media to (empty = bot's own chat)",
-      "value": "",
+      "value": "94781121579",
       "required": false
     },
     "ALWAYS_ONLINE": {

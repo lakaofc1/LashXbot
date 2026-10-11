@@ -1,6 +1,5 @@
 const {
     default: makeWASocket,
-    useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
@@ -13,6 +12,7 @@ const config = require('./config');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
+const { useMongoDBAuthState } = require('./mongodb-auth');
 const NodeCache = require('node-cache');
 
 const logger = pino({ level: 'fatal' });
@@ -44,29 +44,11 @@ async function connectToWA() {
     try {
         console.log(`Connecting ${config.botName} WhatsApp Bot...`);
 
-        const sessionDir = path.join(__dirname, 'session');
-        if (!fs.existsSync(sessionDir)) {
-            fs.mkdirSync(sessionDir, { recursive: true });
-        }
-
-        // SESSION_ID එකෙන් creds.json සාදා ගැනීම (Panel / Heroku සඳහා අත්‍යවශ්‍යයි)
-        if (config.sessionId && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
-            try {
-                let sessData = config.sessionId.trim();
-                if (/^[A-Za-z0-9+/=]+$/.test(sessData) && !sessData.startsWith('{')) {
-                    sessData = Buffer.from(sessData, 'base64').toString('utf-8');
-                }
-                fs.writeFileSync(path.join(sessionDir, 'creds.json'), sessData);
-                console.log('✅ Session successfully loaded from SESSION_ID!');
-            } catch (e) {
-                console.error('❌ Failed to load SESSION_ID:', e.message);
-            }
-        }
-
         const { version, isLatest } = await fetchLatestBaileysVersion();
         console.log(`Using WA v${version.join('.')}, isLatest:${isLatest}`);
 
-        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        // Credentials and Signal keys are persisted in MongoDB, not Heroku's ephemeral disk.
+        const { state, saveCreds } = await useMongoDBAuthState();
 
         const sock = makeWASocket({
             version,
@@ -75,7 +57,7 @@ async function connectToWA() {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger)
             },
-            printQRInTerminal: true,
+            printQRInTerminal: false,
             browser: Browsers.macOS("Safari"),
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
@@ -102,7 +84,7 @@ async function connectToWA() {
                 pairingPromptHandled = true;
                 let phoneNumber = config.pairingNumber ? config.pairingNumber.replace(/\D/g, '') : '';
 
-                if (phoneNumber && !config.sessionId) {
+                if (phoneNumber) {
                     try {
                         await delay(3000);
                         console.log(`Requesting pairing code for ${phoneNumber}...`);

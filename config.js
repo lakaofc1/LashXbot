@@ -5,8 +5,8 @@ module.exports = {
     pairingNumber: process.env.PAIRING_NUMBER || "94781121579",
     sessionId: process.env.SESSION_ID || "",
     version: "v3.0.0",
-    prefix: process.env.PREFIX || "#",
-    workMode: process.env.WORK_MODE || "private",
+    prefix: process.env.PREFIX || ".",
+    workMode: process.env.WORK_MODE || "public",
     autoRead: process.env.AUTO_READ === 'true',
     autoStatusView: process.env.AUTO_STATUS_VIEW !== 'false',
     statusEmoji: process.env.STATUS_EMOJI || "🔥",
@@ -17,8 +17,7 @@ module.exports = {
     antiLink: process.env.ANTI_LINK !== 'false',
     antiBad: process.env.ANTI_BAD === 'true',
 
-    // 🌟 අලුතින් එකතු කළ Auto Features
-    alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', // Default: true (හැමවෙලේම Online පෙන්නයි)
-    autoTyping: process.env.AUTO_TYPING === 'true',      // Default: false (Typing පෙන්නන්න ඕන නම් true කරන්න)
-    autoRecording: process.env.AUTO_RECORDING === 'true' // Default: false (Recording පෙන්නන්න ඕන නම් true කරන්න)
+    alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', 
+    autoTyping: process.env.AUTO_TYPING === 'true',      
+    autoRecording: process.env.AUTO_RECORDING === 'true' 
 };

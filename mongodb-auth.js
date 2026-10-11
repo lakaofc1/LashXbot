@@ -5,8 +5,7 @@ const { initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
 
 let clientPromise;
 async function getDb() {
-  // Default URI is included so you do not need to add MONGODB_URI in Heroku Config Vars.
-  // Prefer rotating this database password and setting MONGODB_URI in Heroku Config Vars for security.
+
   const uri = process.env.MONGODB_URI || 'mongodb+srv://lashofc:lashofc@lashofc.z96hrbf.mongodb.net/?appName=lashofc';
   if (!clientPromise) {
     const client = new MongoClient(uri, { serverSelectionTimeoutMS: 15000 });

@@ -39,7 +39,7 @@ function scheduleReconnect(delayMs = 3000) {
 
 function unwrapMessageContent(message) {
     let current = message || {};
-    // Baileys wraps some messages (ephemeral, view-once, document-with-caption).
+    
     for (let i = 0; i < 5; i++) {
         const next = current.ephemeralMessage?.message ||
             current.viewOnceMessage?.message ||
@@ -75,7 +75,6 @@ async function connectToWA() {
         const { version, isLatest } = await fetchLatestBaileysVersion();
         console.log(`Using WA v${version.join('.')}, isLatest:${isLatest}`);
 
-        // Credentials and Signal keys are persisted in MongoDB, not Heroku's ephemeral disk.
         const { state, saveCreds } = await useMongoDBAuthState();
         try {
             const savedSettings = await loadBotSettings();
@@ -107,7 +106,6 @@ async function connectToWA() {
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
 
-            // Panel එකේදී Pairing Code එක Automatic ලබාදීම
             if (
                 connection === 'connecting' &&
                 !state.creds.registered &&
@@ -179,7 +177,6 @@ async function connectToWA() {
                             downloadMediaMessage(msg, 'buffer', {}, { logger: client.logger })
                     });
 
-                    // 🛑 Anti-Delete Logic Execution
                     if (config.ANTI_DELETE !== 'off') {
                             const baseDir = 'message_data';
                             if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
@@ -216,8 +213,6 @@ async function connectToWA() {
                                 const originalMessage = loadChatData(from, messageId)[0];
                                 if (!originalMessage) return;
 
-                                // Do not restore messages originally sent by this bot account.
-                                // Anti-delete should only recover messages from other participants.
                                 if (originalMessage.key?.fromMe === true) {
                                     console.log("Anti-delete: ignored deletion of the bot own message.");
                                     return;
@@ -229,9 +224,6 @@ async function connectToWA() {
                                 const sentByNumber = (sentByJid || '').replace(/@.*/, '');
 
                                 const sriLankaDateTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' });
-
-                                // Do not skip messages sent by this bot account: its own outgoing messages
-                                // must also be recovered when they are deleted.
 
                                 const deleteInfo = `🕒 *Time:* _${sriLankaDateTime}_\n*🚮 Deleted by:* @${deletedByNumber}\n*📩 Sent by:* @${sentByNumber}\n\n`;
                                 const mentions = [deletedByJid, sentByJid].filter(Boolean);
@@ -245,7 +237,7 @@ async function connectToWA() {
                                         mentions
                                     });
                                 } else {
-                                    // Recover common media types when WhatsApp still allows the media to be downloaded.
+                                    
                                     try {
                                         const media = await sms(conn, originalMessage).download();
                                         const kind = Object.keys(original).find((key) => key.endsWith('Message')) || 'message';
@@ -262,18 +254,9 @@ async function connectToWA() {
                                         else if (original.liveLocationMessage) { resentMessage = await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } }); }
                                         else { resentMessage = await conn.sendMessage(delfrom, { text: `${caption}\nThis message type has no supported resend format.`, mentions }); }
 
-                                        // For message types that cannot carry a caption, send the delete details
-                                        // as a reply to the resent media/contact/location so the context stays attached.
-                                        // Always attach delete details as a quoted reply to the recovered item.
-                                        // Caption-capable media keeps the caption too, so details remain visible
-                                        // in clients that do not render quoted replies consistently.
-                                        if (resentMessage) {
-                                            await conn.sendMessage(delfrom, { text: caption, mentions }, { quoted: resentMessage });
-                                        }
                                     } catch (mediaErr) {
                                         console.error('Anti-delete media recovery failed:', mediaErr.message);
-                                        // Do not send the confusing media-key warning to the chat. If WhatsApp no longer
-                                        // provides the media bytes, keep the failure only in Heroku logs.
+
                                         console.warn('Anti-delete could not recover media; no warning message sent.');
                                     }
                                 }
@@ -320,7 +303,6 @@ async function connectToWA() {
                         }
                     }
 
-                    // Auto Typing / Recording
                     if (config.autoTyping) {
                         await sock.sendPresenceUpdate('composing', from);
                     } else if (config.autoRecording) {
@@ -329,7 +311,6 @@ async function connectToWA() {
 
                     const body = getTextFromMessage(mek.message);
 
-                    // Group moderation: anti-link and anti-bad-word. Only delete for non-admins.
                     if (isGroup && !isOwner && body) {
                         let metadata = null;
                         try { metadata = await sock.groupMetadata(from); } catch (_) {}

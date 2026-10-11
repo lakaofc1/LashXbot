@@ -5,7 +5,7 @@ module.exports = {
     pairingNumber: process.env.PAIRING_NUMBER || "94781121579",
     sessionId: process.env.SESSION_ID || "",
     version: "v3.0.0",
-    prefix: process.env.PREFIX || ".",
+    prefix: process.env.PREFIX || "#",
     workMode: process.env.WORK_MODE || "private",
     autoRead: process.env.AUTO_READ === 'true',
     autoStatusView: process.env.AUTO_STATUS_VIEW !== 'false',

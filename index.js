@@ -217,13 +217,14 @@ async function connectToWA() {
                                 if (!originalMessage) return;
 
                                 const deletedByJid = revocationMessage.key.participant || revocationMessage.key.remoteJid;
-                                const sentByJid = originalMessage.key.participant || originalMessage.key.remoteJid;
+                                const sentByJid = originalMessage.key.fromMe ? (sock.user?.id || originalMessage.key.participant || originalMessage.key.remoteJid) : (originalMessage.key.participant || originalMessage.key.remoteJid);
                                 const deletedByNumber = (deletedByJid || '').replace(/@.*/, '');
                                 const sentByNumber = (sentByJid || '').replace(/@.*/, '');
 
                                 const sriLankaDateTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' });
 
-                                if (deletedByNumber.includes(botNumber) || sentByNumber.includes(botNumber)) return;
+                                // Do not skip messages sent by this bot account: its own outgoing messages
+                                // must also be recovered when they are deleted.
 
                                 const deleteInfo = `🕒 *Time:* _${sriLankaDateTime}_\n*🚮 Deleted by:* @${deletedByNumber}\n*📩 Sent by:* @${sentByNumber}\n\n`;
                                 const mentions = [deletedByJid, sentByJid].filter(Boolean);
@@ -256,8 +257,10 @@ async function connectToWA() {
 
                                         // For message types that cannot carry a caption, send the delete details
                                         // as a reply to the resent media/contact/location so the context stays attached.
-                                        const needsReplyDetails = original.audioMessage || original.stickerMessage || original.contactMessage || original.contactsArrayMessage || original.locationMessage || original.liveLocationMessage;
-                                        if (resentMessage && needsReplyDetails) {
+                                        // Always attach delete details as a quoted reply to the recovered item.
+                                        // Caption-capable media keeps the caption too, so details remain visible
+                                        // in clients that do not render quoted replies consistently.
+                                        if (resentMessage) {
                                             await conn.sendMessage(delfrom, { text: caption, mentions }, { quoted: resentMessage });
                                         }
                                     } catch (mediaErr) {

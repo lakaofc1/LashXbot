@@ -20,7 +20,7 @@ const msgRetryCounterCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 let isStarting = false;
 let reconnectTimer = null;
-let pairingRequested = false;
+let pairingPromptHandled = false;
 let isShuttingDown = false;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,6 +49,7 @@ async function connectToWA() {
             fs.mkdirSync(sessionDir, { recursive: true });
         }
 
+        // SESSION_ID එකෙන් creds.json සාදා ගැනීම (Panel / Heroku සඳහා අත්‍යවශ්‍යයි)
         if (config.sessionId && !fs.existsSync(path.join(sessionDir, 'creds.json'))) {
             try {
                 let sessData = config.sessionId.trim();
@@ -56,9 +57,9 @@ async function connectToWA() {
                     sessData = Buffer.from(sessData, 'base64').toString('utf-8');
                 }
                 fs.writeFileSync(path.join(sessionDir, 'creds.json'), sessData);
-                console.log('Session successfully loaded from SESSION_ID!');
+                console.log('✅ Session successfully loaded from SESSION_ID!');
             } catch (e) {
-                console.error('Failed to load SESSION_ID:', e.message);
+                console.error('❌ Failed to load SESSION_ID:', e.message);
             }
         }
 
@@ -77,8 +78,8 @@ async function connectToWA() {
             printQRInTerminal: true,
             browser: Browsers.macOS("Safari"),
             generateHighQualityLinkPreview: true,
-            syncFullHistory: true,
-            markOnlineOnConnect: config.alwaysOnline, // 🟢 Always Online Setting එක මෙතැනින්
+            syncFullHistory: false,
+            markOnlineOnConnect: config.alwaysOnline,
             msgRetryCounterCache,
             getMessage: async () => {
                 return { conversation: 'Hello' };
@@ -92,12 +93,13 @@ async function connectToWA() {
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
 
+            // Panel එකේදී Pairing Code එක Automatic ලබාදීම
             if (
                 connection === 'connecting' &&
                 !state.creds.registered &&
-                !pairingRequested
+                !pairingPromptHandled
             ) {
-                pairingRequested = true;
+                pairingPromptHandled = true;
                 let phoneNumber = config.pairingNumber ? config.pairingNumber.replace(/\D/g, '') : '';
 
                 if (phoneNumber && !config.sessionId) {
@@ -111,16 +113,12 @@ async function connectToWA() {
                     } catch (err) {
                         console.error('Pairing code error:', err.message);
                     }
-                } else {
-                    console.log('Using session or waiting for connection...');
                 }
             }
 
             if (connection === 'open') {
                 console.log(`✨ ${config.botName} Connected Successfully! ✨`);
-                pairingRequested = false;
-
-                // 🟢 Always Online එක සක්‍රියව තබා ගැනීමට Presence Update කිරීම
+                pairingPromptHandled = false;
                 if (config.alwaysOnline) {
                     await sock.sendPresenceUpdate('available');
                 }
@@ -133,7 +131,7 @@ async function connectToWA() {
                 console.log(`Connection closed. Status Code: ${statusCode ?? 'Unknown'}`);
 
                 if (statusCode === DisconnectReason.loggedOut) {
-                    console.log('Logged out. Delete session and re-pair.');
+                    console.log('Logged out. Delete the /session folder and re-pair.');
                 } else if (shouldReconnect) {
                     console.log('Reconnecting in 3 seconds...');
                     scheduleReconnect(3000);
@@ -143,53 +141,191 @@ async function connectToWA() {
 
         sock.ev.on('messages.upsert', async (chatUpdate) => {
             const messages = chatUpdate.messages || [];
+
             for (const mek of messages) {
                 try {
                     if (!mek.message || !mek.key?.remoteJid) continue;
-                    const from = mek.key.remoteJid;
 
-                    // ⌨️ Auto Typing හෝ Auto Recording සක්‍රිය නම් ක්‍රියාත්මක වීම
+                    const from = mek.key.remoteJid;
+                    const isGroup = from.endsWith('@g.us');
+                    const botNumber = (sock.user?.id || '').split(':')[0].split('@')[0];
+
+                    const conn = sock;
+                    const isFromMe = mek.key.fromMe;
+                    const senderJid = isGroup ? (mek.key.participant || from) : from;
+
+                    let isOwner = isFromMe;
+                    if (!isOwner && senderJid) {
+                        const owners = Array.isArray(config.ownerNumber) ? config.ownerNumber : [];
+                        isOwner = owners.some((num) => senderJid.includes(String(num)));
+                    }
+
+                    const sms = (client, msg) => ({
+                        download: async () =>
+                            downloadMediaMessage(msg, 'buffer', {}, { logger: client.logger })
+                    });
+
+                    // 🛑 Anti-Delete Logic Execution
+                    if (!isOwner && config.ANTI_DELETE !== 'off') {
+                        if (!mek.key.id?.startsWith('BAE5')) {
+                            const baseDir = 'message_data';
+                            if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
+
+                            function loadChatData(remoteJid, messageId) {
+                                const chatFilePath = path.join(baseDir, remoteJid, `${messageId}.json`);
+                                try {
+                                    return JSON.parse(fs.readFileSync(chatFilePath, 'utf8')) || [];
+                                } catch (_) {
+                                    return [];
+                                }
+                            }
+
+                            function saveChatData(remoteJid, messageId, chatData) {
+                                const chatDir = path.join(baseDir, remoteJid);
+                                if (!fs.existsSync(chatDir)) fs.mkdirSync(chatDir, { recursive: true });
+                                try {
+                                    fs.writeFileSync(path.join(chatDir, `${messageId}.json`), JSON.stringify(chatData, null, 2));
+                                } catch (err) {
+                                    console.error('Error saving chat data:', err.message);
+                                }
+                            }
+
+                            function handleIncomingMessage(message) {
+                                const chatData = loadChatData(from, message.key.id);
+                                chatData.push(message);
+                                saveChatData(from, message.key.id, chatData);
+                            }
+
+                            const delfrom = config.DELETEMSGSENDTO !== '' ? config.DELETEMSGSENDTO + '@s.whatsapp.net' : from;
+
+                            async function handleMessageRevocation(revocationMessage) {
+                                const messageId = revocationMessage.message.protocolMessage.key.id;
+                                const originalMessage = loadChatData(from, messageId)[0];
+                                if (!originalMessage) return;
+
+                                const deletedByJid = revocationMessage.key.participant || revocationMessage.key.remoteJid;
+                                const sentByJid = originalMessage.key.participant || originalMessage.key.remoteJid;
+                                const deletedByNumber = (deletedByJid || '').replace(/@.*/, '');
+                                const sentByNumber = (sentByJid || '').replace(/@.*/, '');
+
+                                const sriLankaDateTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' });
+
+                                if (deletedByNumber.includes(botNumber) || sentByNumber.includes(botNumber)) return;
+
+                                const deleteInfo = `🕒 *Time:* _${sriLankaDateTime}_\n*🚮 Deleted by:* @${deletedByNumber}\n*📩 Sent by:* @${sentByNumber}\n\n`;
+                                const mentions = [deletedByJid, sentByJid].filter(Boolean);
+                                const original = originalMessage.message;
+
+                                if (original.conversation || original.extendedTextMessage) {
+                                    const messageText = original.conversation || original.extendedTextMessage?.text || '';
+                                    await conn.sendMessage(delfrom, {
+                                        text: `*🚫 Message Deleted !!*\n\n${deleteInfo}> 🔓 Text: \`\`\`${messageText}\`\`\``,
+                                        mentions
+                                    });
+                                } else if (original.imageMessage) {
+                                    const media = await sms(conn, originalMessage).download();
+                                    await conn.sendMessage(delfrom, {
+                                        image: media,
+                                        caption: `*🚫 Image Deleted !!*\n\n${deleteInfo}`,
+                                        mentions
+                                    });
+                                }
+                            }
+
+                            const isRevoke = mek.message.protocolMessage && mek.message.protocolMessage.type === 0;
+
+                            if (
+                                (config.ANTI_DELETE === 'inbox' && !isGroup) ||
+                                (config.ANTI_DELETE === 'group' && isGroup) ||
+                                (config.ANTI_DELETE === 'group&inbox')
+                            ) {
+                                if (isRevoke) {
+                                    await handleMessageRevocation(mek);
+                                } else {
+                                    handleIncomingMessage(mek);
+                                }
+                            }
+                        }
+                    }
+
+                    if (from === 'status@broadcast') {
+                        if (config.autoStatusView) {
+                            try {
+                                await sock.readMessages([mek.key]);
+                                if (config.statusEmoji) {
+                                    await sock.sendMessage(
+                                        from,
+                                        { react: { text: config.statusEmoji, key: mek.key } },
+                                        { statusJidList: [mek.key.participant].filter(Boolean) }
+                                    );
+                                }
+                            } catch (err) {
+                                console.log('Status Error:', err.message);
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (config.autoRead) {
+                        try {
+                            await sock.readMessages([mek.key]);
+                        } catch (err) {
+                            console.log('Auto-read Error:', err.message);
+                        }
+                    }
+
+                    // Auto Typing / Recording
                     if (config.autoTyping) {
                         await sock.sendPresenceUpdate('composing', from);
                     } else if (config.autoRecording) {
                         await sock.sendPresenceUpdate('recording', from);
                     }
 
-                    const isGroup = from.endsWith('@g.us');
-                    const isFromMe = mek.key.fromMe;
-                    const senderJid = isGroup ? (mek.key.participant || from) : from;
-
                     const messageType = Object.keys(mek.message)[0];
                     let body = '';
+
                     if (messageType === 'conversation') {
                         body = mek.message.conversation || '';
                     } else if (messageType === 'extendedTextMessage') {
                         body = mek.message.extendedTextMessage?.text || '';
                     } else if (messageType === 'imageMessage' && mek.message.imageMessage?.caption) {
                         body = mek.message.imageMessage.caption;
+                    } else if (messageType === 'videoMessage' && mek.message.videoMessage?.caption) {
+                        body = mek.message.videoMessage.caption;
+                    } else if (messageType === 'documentMessage' && mek.message.documentMessage?.caption) {
+                        body = mek.message.documentMessage.caption;
                     }
 
                     const pushName = mek.pushName || 'User';
+
                     await handleCommand(sock, mek, from, body, pushName);
+
                 } catch (err) {
-                    console.error('Message processing error:', err.message);
+                    console.error('Message processing error:', err.stack || err.message || err);
                 }
             }
         });
 
     } catch (err) {
         isStarting = false;
-        console.error('Bot Connection Error:', err.message);
+        console.error('Bot Connection Error:', err.stack || err.message || err);
         scheduleReconnect(5000);
     }
 }
 
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err.message);
+    console.error('Uncaught Exception Detected:', err.stack || err.message || err);
 });
 
 process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason);
+    console.error('Unhandled Rejection Detected:', reason);
+});
+
+process.on('SIGINT', () => {
+    isShuttingDown = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    console.log(`\n${config.botName} Stopped Safely.`);
+    process.exit(0);
 });
 
 connectToWA();

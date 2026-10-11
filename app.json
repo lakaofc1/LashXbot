@@ -32,7 +32,7 @@
     },
     "PREFIX": {
       "description": "Command prefix symbol",
-      "value": "#",
+      "value": ".",
       "required": false
     },
     "WORK_MODE": {

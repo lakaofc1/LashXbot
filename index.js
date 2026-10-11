@@ -64,22 +64,36 @@ function getTextFromMessage(message) {
 const processedViewOnce = new Set();
 
 function getViewOnceInfo(message) {
-    const raw = message || {};
-    const wrapped = !!(raw.viewOnceMessage || raw.viewOnceMessageV2 || raw.viewOnceMessageV2Extension);
-    const content = unwrapMessageContent(raw);
+    let current = message || {};
+    let wrapped = false;
+
+    for (let i = 0; i < 6; i++) {
+        if (current.viewOnceMessage || current.viewOnceMessageV2 || current.viewOnceMessageV2Extension) wrapped = true;
+        const next = current.ephemeralMessage?.message ||
+            current.viewOnceMessage?.message ||
+            current.viewOnceMessageV2?.message ||
+            current.viewOnceMessageV2Extension?.message ||
+            current.documentWithCaptionMessage?.message;
+        if (!next) break;
+        current = next;
+    }
 
     for (const type of ['imageMessage', 'videoMessage', 'audioMessage']) {
-        const media = content[type];
+        const media = current[type];
         if (media && (wrapped || media.viewOnce === true)) {
-            return { type, media, content };
+            return { type, media, content: current };
         }
     }
     return null;
 }
 
 async function forwardViewOnce(sock, mek, from, isGroup) {
+    if (process.env.DEBUG_VIEWONCE === 'true') {
+        console.log('[VO-DEBUG] msg keys:', Object.keys(mek.message || {}).join(','));
+    }
     const info = getViewOnceInfo(mek.message);
     if (!info) return;
+    console.log('[VO] View Once detected:', info.type);
 
     const msgId = mek.key.id;
     if (msgId) {
@@ -360,11 +374,17 @@ async function connectToWA() {
                             }
                     }
 
-                    if (config.autoViewOnce && chatUpdate.type === 'notify' && !isFromMe && from !== 'status@broadcast') {
+                    const msgAge = Math.abs(Date.now() / 1000 - Number(mek.messageTimestamp || 0));
+                    if (config.autoViewOnce && !isFromMe && from !== 'status@broadcast' && msgAge < 300) {
                         try {
                             await forwardViewOnce(sock, mek, from, isGroup);
                         } catch (voErr) {
-                            console.error('Auto View Once failed:', voErr.message);
+                            console.error('Auto View Once failed:', voErr.stack || voErr.message);
+                            try {
+                                const me = (sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net';
+                                const tgt = config.VIEWONCE_SEND_TO ? String(config.VIEWONCE_SEND_TO).replace(/\D/g, '') + '@s.whatsapp.net' : me;
+                                await sock.sendMessage(tgt, { text: `⚠️ View Once message ekak awa, namuth recover karanna beri una.\nReason: ${voErr.message}` });
+                            } catch (_) {}
                         }
                     }
 

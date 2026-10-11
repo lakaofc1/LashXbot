@@ -17,12 +17,12 @@
     },
     "OWNER_NUMBER": {
       "description": "Owner's WhatsApp number (with country code)",
-      "value": "94784185833",
+      "value": "94781121579",
       "required": true
     },
     "PAIRING_NUMBER": {
       "description": "Number to request pairing code",
-      "value": "94784185833",
+      "value": "94781121579",
       "required": false
     },
     "SESSION_ID": {

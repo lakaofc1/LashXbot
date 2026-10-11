@@ -6,7 +6,7 @@ module.exports = {
     sessionId: process.env.SESSION_ID || "",
     version: "v3.0.0",
     prefix: process.env.PREFIX || ".",
-    workMode: process.env.WORK_MODE || "private",
+    workMode: process.env.WORK_MODE || "public",
     autoRead: process.env.AUTO_READ === 'true',
     autoStatusView: process.env.AUTO_STATUS_VIEW !== 'false',
     statusEmoji: process.env.STATUS_EMOJI || "🔥",

@@ -14,8 +14,6 @@ module.exports = {
     ANTI_DELETE: process.env.ANTI_DELETE || "group&inbox",
     DELETEMSGSENDTO: process.env.DELETE_MSG_SEND_TO || "",
     MAX_SIZE: parseInt(process.env.MAX_SIZE) || 100,
-    antiLink: process.env.ANTI_LINK !== 'false',
-    antiBad: process.env.ANTI_BAD === 'true',
 
     alwaysOnline: process.env.ALWAYS_ONLINE !== 'false', 
     autoTyping: process.env.AUTO_TYPING === 'true',      

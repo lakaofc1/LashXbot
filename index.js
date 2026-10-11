@@ -59,11 +59,6 @@ function getTextFromMessage(message) {
         content.documentMessage?.caption || content.documentWithCaptionMessage?.message?.documentMessage?.caption || '';
 }
 
-function normalizeJid(jid) {
-    if (!jid) return '';
-    const [user] = String(jid).split(':');
-    return user.includes('@') ? user : `${user}@s.whatsapp.net`;
-}
 
 async function connectToWA() {
     if (isStarting || isShuttingDown) return;
@@ -188,38 +183,35 @@ async function connectToWA() {
 
                     if (config.ANTI_DELETE !== 'off') {
                             const baseDir = 'message_data';
-                            if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
+                            await fs.promises.mkdir(baseDir, { recursive: true });
 
-                            function loadChatData(remoteJid, messageId) {
+                            async function loadChatData(remoteJid, messageId) {
                                 const chatFilePath = path.join(baseDir, remoteJid, `${messageId}.json`);
                                 try {
-                                    return JSON.parse(fs.readFileSync(chatFilePath, 'utf8')) || [];
+                                    return JSON.parse(await fs.promises.readFile(chatFilePath, 'utf8')) || [];
                                 } catch (_) {
                                     return [];
                                 }
                             }
 
-                            function saveChatData(remoteJid, messageId, chatData) {
+                            async function saveChatData(remoteJid, messageId, chatData) {
                                 const chatDir = path.join(baseDir, remoteJid);
-                                if (!fs.existsSync(chatDir)) fs.mkdirSync(chatDir, { recursive: true });
-                                try {
-                                    fs.writeFileSync(path.join(chatDir, `${messageId}.json`), JSON.stringify(chatData, null, 2));
-                                } catch (err) {
-                                    console.error('Error saving chat data:', err.message);
-                                }
+                                await fs.promises.mkdir(chatDir, { recursive: true });
+                                await fs.promises.writeFile(path.join(chatDir, `${messageId}.json`), JSON.stringify(chatData));
                             }
 
-                            function handleIncomingMessage(message) {
-                                const chatData = loadChatData(from, message.key.id);
+                            async function handleIncomingMessage(message) {
+                                if (!message.key?.id) return;
+                                const chatData = await loadChatData(from, message.key.id);
                                 chatData.push(message);
-                                saveChatData(from, message.key.id, chatData);
+                                await saveChatData(from, message.key.id, chatData);
                             }
 
                             const delfrom = config.DELETEMSGSENDTO !== '' ? config.DELETEMSGSENDTO + '@s.whatsapp.net' : from;
 
                             async function handleMessageRevocation(revocationMessage) {
                                 const messageId = revocationMessage.message.protocolMessage.key.id;
-                                const originalMessage = loadChatData(from, messageId)[0];
+                                const originalMessage = (await loadChatData(from, messageId))[0];
                                 if (!originalMessage) return;
 
                                 if (originalMessage.key?.fromMe === true) {
@@ -263,6 +255,16 @@ async function connectToWA() {
                                         else if (original.liveLocationMessage) { resentMessage = await conn.sendMessage(delfrom, { location: { degreesLatitude: original.liveLocationMessage.degreesLatitude, degreesLongitude: original.liveLocationMessage.degreesLongitude, name: 'Live location (last received position)' } }); }
                                         else { resentMessage = await conn.sendMessage(delfrom, { text: `${caption}\nThis message type has no supported resend format.`, mentions }); }
 
+                                        // For media types that cannot carry a caption (especially stickers and audio),
+                                        // send the delete details as a separate reply to the recovered media.
+                                        if (resentMessage && (original.stickerMessage || original.audioMessage || original.contactMessage || original.locationMessage || original.liveLocationMessage)) {
+                                            const replyLabel = original.stickerMessage ? 'Sticker' : original.audioMessage ? 'Audio' : original.contactMessage ? 'Contact' : 'Location';
+                                            await conn.sendMessage(delfrom, {
+                                                text: `*🚫 This ${replyLabel} Message was deleted !!*\n\n${deleteInfo}${textBlock}`,
+                                                mentions
+                                            }, { quoted: resentMessage });
+                                        }
+
                                     } catch (mediaErr) {
                                         console.error('Anti-delete media recovery failed:', mediaErr.message);
 
@@ -281,7 +283,7 @@ async function connectToWA() {
                                 if (isRevoke) {
                                     await handleMessageRevocation(mek);
                                 } else {
-                                    handleIncomingMessage(mek);
+                                    await handleIncomingMessage(mek);
                                 }
                             }
                     }
@@ -319,41 +321,6 @@ async function connectToWA() {
                     }
 
                     const body = getTextFromMessage(mek.message);
-
-                    if (isGroup && !isOwner && body) {
-                        let metadata = null;
-                        try { metadata = await sock.groupMetadata(from); } catch (_) {}
-                        const participants = metadata?.participants || [];
-                        const isSenderAdmin = participants.some(p => normalizeJid(p.id) === normalizeJid(senderJid) && Boolean(p.admin));
-                        const botJid = normalizeJid(sock.user?.id || '');
-                        const isBotAdmin = participants.some(p => normalizeJid(p.id) === botJid && Boolean(p.admin));
-                        if (!isSenderAdmin && isBotAdmin) {
-                            const linkPattern = /(?:https?:\/\/|www\.|chat\.whatsapp\.com\/|wa\.me\/|t\.me\/|discord\.gg\/)[^\s]+/i;
-                            if (config.antiLink && linkPattern.test(body)) {
-                                try {
-                                    await sock.sendMessage(from, { delete: mek.key });
-                                    await sock.sendMessage(from, { text: '🚫 Group links are not allowed.' }, { quoted: mek });
-                                } catch (e) { console.error('Anti-link action failed:', e.message); }
-                                continue;
-                            }
-                            if (config.antiBad) {
-                                try {
-                                    if (!global.__lashBadWords) {
-                                        const response = await fetch('https://laka-md-databes.pages.dev/bad.json');
-                                        if (response.ok) global.__lashBadWords = await response.json();
-                                    }
-                                    const bad = global.__lashBadWords;
-                                    const words = Array.isArray(bad) ? bad : (bad && typeof bad === 'object' ? Object.values(bad) : []);
-                                    const matched = words.some(word => typeof word === 'string' && word.trim() && body.toLowerCase().includes(word.toLowerCase()));
-                                    if (matched && !/tent|docu|https/i.test(body)) {
-                                        await sock.sendMessage(from, { delete: mek.key });
-                                        await sock.sendMessage(from, { text: '🚫 Bad word detected!' }, { quoted: mek });
-                                        continue;
-                                    }
-                                } catch (e) { console.error('Anti-bad-word check failed:', e.message); }
-                            }
-                        }
-                    }
 
                     const pushName = mek.pushName || 'User';
 

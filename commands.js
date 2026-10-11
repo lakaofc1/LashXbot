@@ -348,8 +348,8 @@ ${isOwner ? `┣━━ 👑 *SYSTEM CONTROLS*
                     config.ANTI_DELETE = value;
                     config.antiDelete = value !== 'off';
                 } else {
-                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording', antilink: 'antiLink', antibad: 'antiBad' };
-                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording|antilink|antibad on|off`);
+                    const fields = { antidelete: 'antiDelete', autoread: 'autoRead', statusview: 'autoStatusView', online: 'alwaysOnline', typing: 'autoTyping', recording: 'autoRecording' };
+                    if (!fields[feature] || bool === null) return sendReply(`Usage: ${config.prefix}setfeature antidelete|autoread|statusview|online|typing|recording on|off`);
                     config[fields[feature]] = bool;
                     if (feature === 'antidelete') config.ANTI_DELETE = bool ? 'group&inbox' : 'off';
                 }

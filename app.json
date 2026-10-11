@@ -94,16 +94,6 @@
       "description": "Show auto recording status (true/false)",
       "value": "false",
       "required": false
-    },
-    "ANTI_LINK": {
-      "description": "Enable anti-link feature (true/false)",
-      "value": "true",
-      "required": false
-    },
-    "ANTI_BAD": {
-      "description": "Enable anti-bad-word feature (true/false)",
-      "value": "false",
-      "required": false
     }
   },
   "buildpacks": [

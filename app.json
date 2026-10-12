@@ -17,7 +17,7 @@
     },
     "OWNER_NAME": {
       "description": "Owner's name",
-      "value": "Lashan (Lashx)",
+      "value": "Lashmitha 🎗️",
       "required": false
     },
     "OWNER_NUMBER": {
@@ -42,7 +42,7 @@
     },
     "WORK_MODE": {
       "description": "Bot work mode: private or public",
-      "value": "public",
+      "value": "private",
       "required": false
     },
     "AUTO_READ": {
@@ -67,7 +67,7 @@
     },
     "ANTI_DELETE": {
       "description": "Anti delete target mode (group&inbox)",
-      "value": "group&inbox",
+      "value": "inbox",
       "required": false
     },
     "DELETE_MSG_SEND_TO": {
@@ -92,7 +92,7 @@
     },
     "AUTO_RECORDING": {
       "description": "Show auto recording status (true/false)",
-      "value": "false",
+      "value": "true",
       "required": false
     }
   },
